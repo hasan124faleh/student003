@@ -137,41 +137,6 @@ const exportToPDF = (students: Student[], title = "سجل القيد العام"
   doc.save(`سجل_الطلاب_${new Date().getTime()}.pdf`);
 };
 
-const generateTemplate = () => {
-  const firstNames = ['محمد', 'أحمد', 'عبدالله', 'علي', 'عمر', 'خالد', 'سعد', 'سعيد', 'صالح', 'فهد', 'سلمان', 'يوسف', 'إبراهيم'];
-  const secondNames = ['حسين', 'حسن', 'عبدالرحمن', 'محمود', 'مصطفى', 'جعفر', 'عباس', 'كاظم', 'رضا', 'مهدي'];
-  const thirdNames = ['علي', 'محمد', 'جاسم', 'كريم', 'خلف', 'سالم', 'حمزة', 'فاضل'];
-  const fourthNames = ['عبدالله', 'ناصر', 'منصور', 'خليفة', 'سلطان', 'يحيى', 'زكريا'];
-  const titles = ['الشمري', 'العتيبي', 'القحطاني', 'العنزي', 'الحربي', 'الزهراني', 'المالكي', 'الدوسري', 'التميمي', 'الخالدي'];
-
-  const templateData = [];
-  
-  for (let reg = 1; reg <= 10; reg++) {
-    for (let i = 0; i < 200; i++) {
-       const n1 = firstNames[Math.floor(Math.random() * firstNames.length)];
-       const n2 = secondNames[Math.floor(Math.random() * secondNames.length)];
-       const n3 = thirdNames[Math.floor(Math.random() * thirdNames.length)];
-       const n4 = fourthNames[Math.floor(Math.random() * fourthNames.length)];
-       const title = titles[Math.floor(Math.random() * titles.length)];
-       
-       const pageNum = Math.floor(i / 30) + 1;
-
-       templateData.push({
-          'الاسم الرباعي': `${n1} ${n2} ${n3} ${n4}`, 
-          'العائلة': title,
-          'رقم الصفحة': pageNum.toString(),
-          'رقم القيد': reg.toString(),
-          'الحالة الدراسية': 'مستمر',
-          'ملاحظات': ''
-       });
-    }
-  }
-
-  const worksheet = XLSX.utils.json_to_sheet(templateData);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "نموذج 2000 طالب");
-  XLSX.writeFile(workbook, "نموذج_سجل_القيود_الكبير.xlsx");
-};
 
 const readExcel = (file: File): Promise<any[]> => {
   return new Promise((resolve, reject) => {
@@ -206,17 +171,17 @@ const SkeletonLoader = () => (
 
 const Modal = ({ children, onClose, zIndex = "z-50" }: { children: React.ReactNode; onClose: () => void; zIndex?: string }) => (
   <div 
-    className={`fixed inset-0 bg-slate-900/60 ${zIndex} flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in overflow-y-auto modal-overlay`} 
+    className={`fixed inset-0 bg-slate-900/60 ${zIndex} flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm overflow-y-auto modal-overlay`} 
     onClick={onClose}
+    style={{ left: 0, top: 0, right: 0, bottom: 0, width: '100%', minHeight: '100%' }}
   >
     <div 
-      className="w-full max-w-lg relative" 
+      className="w-full max-w-lg relative my-auto mx-auto" 
       onClick={e => e.stopPropagation()}
-      style={{ position: 'relative', margin: 'auto' }}
     >
         <button 
             onClick={onClose} 
-            className="absolute -top-2 -left-2 p-2 bg-white text-slate-600 hover:bg-slate-100 rounded-full shadow-lg transition-all z-[60]"
+            className="absolute top-2.5 left-2.5 p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full shadow-md transition-all z-[60]"
             title="إغلاق"
             type="button"
         >
@@ -477,6 +442,7 @@ export default function App() {
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [printMode, setPrintMode] = useState<'list' | 'single' | 'selected'>('list');
+  const [isPrinting, setIsPrinting] = useState(false);
   const [alertConfig, setAlertConfig] = useState<{ message: string; type: 'error' | 'success' | 'warning' } | null>(null);
   const [confirmConfig, setConfirmConfig] = useState<{ title: string; message: string; onConfirm: () => void; isDestructive?: boolean } | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -577,6 +543,15 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Print state listener
+  useEffect(() => {
+    const handleAfterPrint = () => {
+      setIsPrinting(false);
+    };
+    window.addEventListener('afterprint', handleAfterPrint);
+    return () => window.removeEventListener('afterprint', handleAfterPrint);
   }, []);
 
   // Online/Offline detection
@@ -1038,7 +1013,11 @@ export default function App() {
       return;
     }
     setPrintMode('selected');
-    setTimeout(() => window.print(), 500);
+    setIsPrinting(true);
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => setIsPrinting(false), 1000);
+    }, 500);
     setShowPrintSelectedModal(false);
   };
 
@@ -1953,7 +1932,6 @@ export default function App() {
                 <button onClick={() => setView('trash')} className="w-full py-3 bg-slate-50 rounded-xl font-bold flex justify-between px-3 hover:bg-slate-100 transition-colors text-sm items-center"><span>سلة المحذوفات</span> <ArrowRight size={16}/></button>
                 <button onClick={() => setView('stats')} className="w-full py-3 bg-blue-50 text-blue-700 rounded-xl font-bold px-3 flex items-center gap-2 hover:bg-blue-100 transition-transform active:scale-95 text-sm"><BarChart3 size={18}/> إحصائيات القيود</button>
                 <button onClick={() => exportToExcel(students.filter(s=>!s.isDeleted))} className="w-full py-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold px-3 flex items-center gap-2 hover:bg-emerald-100 transition-transform active:scale-95 text-sm"><Download size={18}/> تصدير إلى Excel</button>
-                <button onClick={generateTemplate} className="w-full py-3 bg-indigo-50 text-indigo-700 rounded-xl font-bold px-3 flex items-center gap-2 hover:bg-indigo-100 transition-transform active:scale-95 text-sm"><FileSpreadsheet size={18}/> إنشاء نموذج (2000 طالب)</button>
                 <label className={`w-full py-3 ${currentTheme.primary} ${currentTheme.hover} text-white rounded-xl font-bold flex items-center justify-between px-3 cursor-pointer transition-colors text-sm`}>
                     <span className="flex items-center gap-2"><Upload size={18}/> استيراد من Excel</span>
                     <input type="file" className="hidden" accept=".xlsx" onChange={handleImport} disabled={importing} />
@@ -2292,7 +2270,11 @@ export default function App() {
                       setPrintMode('list'); 
                       setPrintRegInput(''); 
                       setShowPrintModal(false); 
-                      setTimeout(() => window.print(), 500); 
+                      setIsPrinting(true);
+                      setTimeout(() => {
+                        window.print();
+                        setTimeout(() => setIsPrinting(false), 1000);
+                      }, 500);
                     }} 
                     className={`w-full py-2.5 ${currentTheme.primary} ${currentTheme.hover} text-white rounded-xl font-bold transition-colors text-sm`}
                   >
@@ -2310,7 +2292,11 @@ export default function App() {
                       setPrintMode('list'); 
                       setSelectedRegFilter(printRegInput); 
                       setShowPrintModal(false); 
-                      setTimeout(() => window.print(), 500); 
+                      setIsPrinting(true);
+                      setTimeout(() => {
+                        window.print();
+                        setTimeout(() => setIsPrinting(false), 1000);
+                      }, 500);
                     }} 
                     className={`w-full py-2.5 ${currentTheme.secondary} ${currentTheme.secondaryHover} text-white rounded-xl font-bold disabled:opacity-50 transition-colors text-sm`} 
                     disabled={!printRegInput}
@@ -2383,7 +2369,11 @@ export default function App() {
                       onClick={() => { 
                         setSelectedId(s.id); 
                         setPrintMode('single'); 
-                        setTimeout(() => window.print(), 500); 
+                        setIsPrinting(true);
+                        setTimeout(() => {
+                          window.print();
+                          setTimeout(() => setIsPrinting(false), 1000);
+                        }, 500);
                       }} 
                       className={`w-full ${currentTheme.secondary} ${currentTheme.secondaryHover} text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg text-sm`}
                     >
@@ -2447,9 +2437,13 @@ export default function App() {
         )}
       </div>
       
-      {printMode === 'list' && <PrintView students={filtered} title={selectedRegFilter ? `كشف الطلاب - قيد رقم ${selectedRegFilter}` : "كشف القيد العام"} selectedFields={printTemplateFields} />}
-      {printMode === 'single' && students.find(s=>s.id===selectedId) && <SingleStudentPrint student={students.find(s=>s.id===selectedId)!} />}
-      {printMode === 'selected' && <PrintView students={students.filter(s => selectedStudents.includes(s.id) && !s.isDeleted)} title="الطلاب المحددين" selectedFields={printTemplateFields} />}
+      {isPrinting && (
+        <>
+          {printMode === 'list' && <PrintView students={filtered} title={selectedRegFilter ? `كشف الطلاب - قيد رقم ${selectedRegFilter}` : "كشف القيد العام"} selectedFields={printTemplateFields} />}
+          {printMode === 'single' && students.find(s=>s.id===selectedId) && <SingleStudentPrint student={students.find(s=>s.id===selectedId)!} />}
+          {printMode === 'selected' && <PrintView students={students.filter(s => selectedStudents.includes(s.id) && !s.isDeleted)} title="الطلاب المحددين" selectedFields={printTemplateFields} />}
+        </>
+      )}
     </>
   );
 }
