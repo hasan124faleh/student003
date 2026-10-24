@@ -11,7 +11,7 @@ import {
   AlertCircle, ArrowUp, RotateCcw, Info, Calendar, 
   ArrowLeft, Palette, Loader2, BarChart3, Moon, Sun, 
   Mic, Maximize2, Minimize2, WifiOff, Share2, 
-  MessageSquare, CheckSquare, Check
+  MessageSquare, CheckSquare, Check, Filter
 } from 'lucide-react';
 import { initializeApp } from "firebase/app";
 import { 
@@ -510,8 +510,10 @@ export default function App() {
   const [showAddRegModal, setShowAddRegModal] = useState(false);
   const [newRegInput, setNewRegInput] = useState('');
   const [savedStudentName, setSavedStudentName] = useState<{ name: string; page: string; reg: string } | null>(null);
-  const [isMobileSearchActive, setIsMobileSearchActive] = useState(false);
+  const [isSearchActive, setIsSearchActive] = useState(false);
+  const [showSearchFilters, setShowSearchFilters] = useState(false);
 
+  const inSearchMode = isSearchActive || search.trim().length > 0;
   const currentTheme = themeColors[colorTheme] || themeColors.slate;
 
   // Group students by first letter for display only
@@ -569,7 +571,8 @@ export default function App() {
         setShowPrintTemplateModal(false);
         setShowShareModal(false);
         setShowPrintSelectedModal(false);
-        setIsMobileSearchActive(false);
+        setIsSearchActive(false);
+        setShowSearchFilters(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -1109,7 +1112,7 @@ export default function App() {
                   )}
 
                   {view !== 'trash' && (
-                    <div className={`${(isMobileSearchActive || search.length > 0) ? 'hidden md:grid' : 'grid'} grid-cols-2 lg:grid-cols-3 gap-3`}>
+                    <div className={`${inSearchMode ? 'hidden' : 'grid'} grid-cols-2 lg:grid-cols-3 gap-3`}>
                         <StatCard 
                           title="إجمالي الطلاب" 
                           value={students.filter(s => !s.isDeleted).length} 
@@ -1135,7 +1138,7 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Search Bar with Clear (X) Button and Voice */}
+                  {/* Search Bar with Clear (X) Button, Voice, and Filters Toggle */}
                   <div className="bg-slate-50 p-1.5 rounded-xl border border-slate-200 transition-all mb-3">
                      <div className={`relative flex items-center bg-white rounded-lg border border-slate-200 px-3 py-1 focus-within:ring-2 ${currentTheme.ring} transition-all`}>
                          <Search className="text-slate-400 ml-1 shrink-0" size={16} />
@@ -1145,10 +1148,10 @@ export default function App() {
                            className="flex-1 bg-transparent outline-none text-slate-700 h-8 font-bold text-xs" 
                            placeholder="ابحث باسم الطالب... (Ctrl+F)" 
                            value={search} 
-                           onFocus={() => setIsMobileSearchActive(true)}
+                           onFocus={() => setIsSearchActive(true)}
                            onChange={(e) => {
                              setSearch(e.target.value);
-                             if (e.target.value) setIsMobileSearchActive(true);
+                             if (e.target.value) setIsSearchActive(true);
                            }} 
                          />
                          {/* Clear X Button */}
@@ -1174,16 +1177,38 @@ export default function App() {
                          >
                            {isListening ? <Mic size={16} className="text-red-600" /> : <Mic size={16} />}
                          </button>
-                         {/* Mobile Cancel Search Button */}
-                         {(isMobileSearchActive || search.length > 0) && (
+                         {/* Filters Toggle Button inside Search Bar */}
+                         <button 
+                           type="button"
+                           onClick={() => setShowSearchFilters(prev => !prev)}
+                           data-tooltip={showSearchFilters ? "إخفاء الفلاتر" : "إظهار الفلاتر"}
+                           title={showSearchFilters ? "إخفاء الفلاتر" : "إظهار الفلاتر"}
+                           className={`px-2 py-1 rounded-lg flex items-center gap-1 transition-all shrink-0 text-xs font-bold border mx-1 ${
+                             showSearchFilters 
+                               ? 'bg-blue-50 border-blue-300 text-blue-700 shadow-xs' 
+                               : (selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL')
+                                 ? 'bg-amber-50 border-amber-300 text-amber-700'
+                                 : 'hover:bg-slate-100 text-slate-600 border-slate-200'
+                           }`}
+                         >
+                           <Filter size={14} className="shrink-0" />
+                           <span className="hidden sm:inline">{showSearchFilters ? 'إخفاء الفلاتر' : 'الفلاتر'}</span>
+                           {(selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL') && (
+                             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
+                           )}
+                         </button>
+                         {/* Cancel Search Button (Desktop & Mobile) */}
+                         {inSearchMode && (
                            <button
                              type="button"
                              onClick={() => {
                                setSearch('');
-                               setIsMobileSearchActive(false);
+                               setIsSearchActive(false);
+                               setShowSearchFilters(false);
                                searchInputRef.current?.blur();
                              }}
-                             className="md:hidden text-xs font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-lg transition-colors shrink-0 mr-1"
+                             className="text-xs font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-lg transition-colors shrink-0 mr-1 border border-blue-200"
+                             title="إلغاء البحث واستعادة الشاشة الرئيسية"
                            >
                              إلغاء
                            </button>
@@ -1191,27 +1216,49 @@ export default function App() {
                      </div>
                   </div>
 
-                  {/* Mobile Search Results Indicator */}
-                  {(isMobileSearchActive || search.length > 0) && (
-                    <div className="md:hidden flex items-center justify-between px-2 py-1 text-xs text-slate-500 font-bold bg-white rounded-xl border border-slate-100 shadow-xs mb-2 animate-fade-in">
-                      <span>{search.trim().length > 0 ? `نتائج البحث: ${filtered.length} طالب` : `قائمة الطلاب (${filtered.length})`}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSearch('');
-                          setIsMobileSearchActive(false);
-                          searchInputRef.current?.blur();
-                        }}
-                        className="text-blue-600 hover:underline text-[11px]"
-                      >
-                        إغلاق البحث
-                      </button>
+                  {/* Search Results & Filter Status Bar (Desktop & Mobile) */}
+                  {inSearchMode && (
+                    <div className="flex items-center justify-between px-3 py-1.5 text-xs text-slate-600 font-bold bg-white rounded-xl border border-slate-200 shadow-xs mb-2 animate-fade-in">
+                      <div className="flex items-center gap-2">
+                        <span>{search.trim().length > 0 ? `نتائج البحث: ${filtered.length} طالب` : `قائمة الطلاب (${filtered.length})`}</span>
+                        {(selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL') && (
+                          <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded-full font-semibold">
+                            فلاتر نشطة
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowSearchFilters(prev => !prev)}
+                          className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg border transition-colors ${
+                            showSearchFilters 
+                              ? 'bg-blue-50 border-blue-300 text-blue-700' 
+                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <Filter size={12} />
+                          <span>{showSearchFilters ? 'إخفاء الفلاتر' : 'إظهار الفلاتر'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearch('');
+                            setIsSearchActive(false);
+                            setShowSearchFilters(false);
+                            searchInputRef.current?.blur();
+                          }}
+                          className="text-red-500 hover:text-red-700 hover:underline text-xs"
+                        >
+                          إغلاق البحث
+                        </button>
+                      </div>
                     </div>
                   )}
 
                   {/* Selection Actions */}
                   {selectedStudents.length > 0 && (
-                    <div className={`${(isMobileSearchActive || search.length > 0) ? 'hidden md:flex' : 'flex'} bg-blue-50 p-3 rounded-xl border border-blue-200 flex-wrap items-center justify-between gap-2 animate-fade-in`}>
+                    <div className={`${inSearchMode ? 'hidden' : 'flex'} bg-blue-50 p-3 rounded-xl border border-blue-200 flex-wrap items-center justify-between gap-2 animate-fade-in`}>
                       <span className="text-xs font-bold text-blue-700">تم تحديد {selectedStudents.length} طالب</span>
                       <div className="flex flex-wrap gap-2">
                         <button 
@@ -1242,34 +1289,36 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Filters */}
-                  <div className={`${(isMobileSearchActive || search.length > 0) ? 'hidden md:grid' : 'grid'} grid-cols-2 md:grid-cols-4 gap-2 items-center mb-4`}>
-                      <select value={selectedRegFilter} onChange={(e) => setSelectedRegFilter(e.target.value)} className="bg-white rounded-lg px-2 py-2 border border-slate-200 text-xs font-bold outline-none h-9">
-                          <option value="">جميع القيود</option>
-                          {Array.from(new Set(students.filter(s => !s.isDeleted).map(s => s.regNumber))).sort((a,b) => Number(a)-Number(b)).map(r => (
-                            <option key={r} value={r}>قيد {r}</option>
-                          ))}
-                      </select>
-                      <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="bg-white rounded-lg px-2 py-2 border border-slate-200 text-xs font-bold outline-none h-9">
-                          <option value="ALL">جميع الحالات</option>
-                          <option value="active">مستمر</option>
-                          <option value="transferred">منقول</option>
-                          <option value="left">تارك</option>
-                          <option value="graduated">متخرج</option>
-                      </select>
-                      <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="bg-white rounded-lg px-2 py-2 border border-slate-200 text-xs font-bold outline-none h-9">
-                          <option value="recent">الأحدث أولاً</option>
-                          <option value="alphabetical">ترتيب أبجدي</option>
-                          <option value="byPage">حسب الصفحة</option>
-                      </select>
-                      <select value={yearFilter} onChange={e => setYearFilter(e.target.value)} className="bg-white rounded-lg px-2 py-2 border border-slate-200 text-xs font-bold outline-none h-9">
-                          <option value="ALL">جميع السنوات</option>
-                          {years.map(y => <option key={y} value={y}>{y}</option>)}
-                      </select>
-                  </div>
+                  {/* Filters (Hidden during search by default, toggleable via button) */}
+                  {(!inSearchMode || showSearchFilters) && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-center mb-4 animate-fade-in">
+                        <select value={selectedRegFilter} onChange={(e) => setSelectedRegFilter(e.target.value)} className="bg-white rounded-lg px-2 py-2 border border-slate-200 text-xs font-bold outline-none h-9">
+                            <option value="">جميع القيود</option>
+                            {Array.from(new Set(students.filter(s => !s.isDeleted).map(s => s.regNumber))).sort((a,b) => Number(a)-Number(b)).map(r => (
+                              <option key={r} value={r}>قيد {r}</option>
+                            ))}
+                        </select>
+                        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="bg-white rounded-lg px-2 py-2 border border-slate-200 text-xs font-bold outline-none h-9">
+                            <option value="ALL">جميع الحالات</option>
+                            <option value="active">مستمر</option>
+                            <option value="transferred">منقول</option>
+                            <option value="left">تارك</option>
+                            <option value="graduated">متخرج</option>
+                        </select>
+                        <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="bg-white rounded-lg px-2 py-2 border border-slate-200 text-xs font-bold outline-none h-9">
+                            <option value="recent">الأحدث أولاً</option>
+                            <option value="alphabetical">ترتيب أبجدي</option>
+                            <option value="byPage">حسب الصفحة</option>
+                        </select>
+                        <select value={yearFilter} onChange={e => setYearFilter(e.target.value)} className="bg-white rounded-lg px-2 py-2 border border-slate-200 text-xs font-bold outline-none h-9">
+                            <option value="ALL">جميع السنوات</option>
+                            {years.map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                    </div>
+                  )}
 
                   {/* Action Buttons */}
-                  <div className={`${(isMobileSearchActive || search.length > 0) ? 'hidden md:flex' : 'flex'} flex-wrap gap-2`}>
+                  <div className={`${inSearchMode ? 'hidden' : 'flex'} flex-wrap gap-2`}>
                         <button 
                           onClick={() => { setSelectedId(null); setView('add'); setSimilarStudents([]); }} 
                           data-tooltip="إضافة طالب جديد (Ctrl+N)"
@@ -1295,7 +1344,7 @@ export default function App() {
 
                   {/* ALPHABET NAVIGATION (Fast Letter Jump) */}
                   {sortBy === 'alphabetical' && !debouncedQuery && alphabetLetters.length > 0 && (
-                    <div className={`${(isMobileSearchActive || search.length > 0) ? 'hidden md:flex' : 'flex'} alphabet-nav`}>
+                    <div className={`${inSearchMode ? 'hidden' : 'flex'} alphabet-nav`}>
                       {alphabetLetters.map(letter => (
                         <button
                           key={letter}
