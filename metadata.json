@@ -2,5 +2,7 @@
   "name": "سجل القيد العام",
   "description": "نظام إدارة وسجل القيد العام للطلاب مع إمكانية البحث والطباعة والتصدير",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

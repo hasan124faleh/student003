@@ -491,7 +491,14 @@ export default function App() {
   const [isListening, setIsListening] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [showPrintTemplateModal, setShowPrintTemplateModal] = useState(false);
-  const [printTemplateFields, setPrintTemplateFields] = useState<string[]>(['name', 'pageNumber', 'regNumber']);
+  const [printTemplateFields, setPrintTemplateFields] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('printTemplateFields');
+      return saved ? JSON.parse(saved) : ['name', 'pageNumber', 'regNumber'];
+    } catch {
+      return ['name', 'pageNumber', 'regNumber'];
+    }
+  });
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareText, setShareText] = useState('');
   const [shareStudents, setShareStudents] = useState<Student[]>([]);
@@ -1955,109 +1962,98 @@ export default function App() {
             </Modal>
         )}
 
-        {/* Print Template Customization Modal (SWAPPED: رقم الصفحة before رقم القيد) */}
+        {/* Print Template Customization Modal */}
         {showPrintTemplateModal && (
           <Modal onClose={() => setShowPrintTemplateModal(false)}>
             <div className="bg-white rounded-2xl p-5 space-y-4">
-              <h3 className="text-lg font-bold">تخصيص قالب الطباعة</h3>
-              <p className="text-xs text-slate-500">اختر الحقول التي تريد ظهورها في المطبوعات</p>
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800">تخصيص قالب الطباعة</h3>
+                  <p className="text-xs text-slate-500">اختر الأعمدة المراد ظهورها في المطبوعات</p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button 
+                    type="button"
+                    onClick={() => setPrintTemplateFields(['name', 'lastName', 'pageNumber', 'regNumber', 'status'])}
+                    className="text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-colors"
+                  >
+                    تحديد الكل
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setPrintTemplateFields(['name', 'pageNumber', 'regNumber'])}
+                    className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors"
+                  >
+                    الافتراضي
+                  </button>
+                </div>
+              </div>
               
-              <div className="space-y-3">
-                <label className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer print-template-item">
-                  <span className="font-bold text-sm">الاسم الكامل</span>
-                  <input 
-                    type="checkbox" 
-                    checked={printTemplateFields.includes('name')}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setPrintTemplateFields(prev => [...prev, 'name']);
-                      } else {
-                        setPrintTemplateFields(prev => prev.filter(f => f !== 'name'));
-                      }
-                    }}
-                    className="rounded border-slate-300"
-                  />
-                </label>
-                
-                <label className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer print-template-item">
-                  <span className="font-bold text-sm">اللقب (العائلة)</span>
-                  <input 
-                    type="checkbox" 
-                    checked={printTemplateFields.includes('lastName')}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setPrintTemplateFields(prev => [...prev, 'lastName']);
-                      } else {
-                        setPrintTemplateFields(prev => prev.filter(f => f !== 'lastName'));
-                      }
-                    }}
-                    className="rounded border-slate-300"
-                  />
-                </label>
-                
-                {/* SWAPPED: رقم الصفحة before رقم القيد */}
-                <label className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer print-template-item">
-                  <span className="font-bold text-sm">رقم الصفحة</span>
-                  <input 
-                    type="checkbox" 
-                    checked={printTemplateFields.includes('pageNumber')}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setPrintTemplateFields(prev => [...prev, 'pageNumber']);
-                      } else {
-                        setPrintTemplateFields(prev => prev.filter(f => f !== 'pageNumber'));
-                      }
-                    }}
-                    className="rounded border-slate-300"
-                  />
-                </label>
-
-                <label className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer print-template-item">
-                  <span className="font-bold text-sm">رقم القيد</span>
-                  <input 
-                    type="checkbox" 
-                    checked={printTemplateFields.includes('regNumber')}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setPrintTemplateFields(prev => [...prev, 'regNumber']);
-                      } else {
-                        setPrintTemplateFields(prev => prev.filter(f => f !== 'regNumber'));
-                      }
-                    }}
-                    className="rounded border-slate-300"
-                  />
-                </label>
-                
-                <label className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer print-template-item">
-                  <span className="font-bold text-sm">الحالة الدراسية (م - ن - ت - خ)</span>
-                  <input 
-                    type="checkbox" 
-                    checked={printTemplateFields.includes('status')}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setPrintTemplateFields(prev => [...prev, 'status']);
-                      } else {
-                        setPrintTemplateFields(prev => prev.filter(f => f !== 'status'));
-                      }
-                    }}
-                    className="rounded border-slate-300"
-                  />
-                </label>
+              <div className="space-y-2.5">
+                {[
+                  { id: 'name', label: 'الاسم الكامل' },
+                  { id: 'lastName', label: 'اللقب (العائلة)' },
+                  { id: 'pageNumber', label: 'رقم الصفحة (ص)' },
+                  { id: 'regNumber', label: 'رقم القيد (قيد)' },
+                  { id: 'status', label: 'الحالة الدراسية (م - ن - ت - خ)' }
+                ].map(field => {
+                  const isChecked = printTemplateFields.includes(field.id);
+                  return (
+                    <div 
+                      key={field.id}
+                      onClick={() => {
+                        setPrintTemplateFields(prev => 
+                          prev.includes(field.id) 
+                            ? prev.filter(f => f !== field.id) 
+                            : [...prev, field.id]
+                        );
+                      }}
+                      className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer select-none ${
+                        isChecked 
+                          ? 'bg-blue-50/70 border-blue-200 text-blue-900 shadow-xs' 
+                          : 'bg-slate-50/70 border-slate-200 text-slate-700 hover:bg-slate-100/70'
+                      }`}
+                    >
+                      <span className="font-bold text-sm">{field.label}</span>
+                      <input 
+                        type="checkbox" 
+                        checked={isChecked}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          setPrintTemplateFields(prev => 
+                            e.target.checked 
+                              ? (prev.includes(field.id) ? prev : [...prev, field.id])
+                              : prev.filter(f => f !== field.id)
+                          );
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded border-slate-300 w-4 h-4 text-blue-600 cursor-pointer"
+                      />
+                    </div>
+                  );
+                })}
               </div>
 
-              <div className="flex gap-3 pt-3">
+              <div className="flex gap-3 pt-2">
                 <button 
+                  type="button"
                   onClick={() => {
-                    setPrintTemplateFields(['name', 'pageNumber', 'regNumber', 'status', 'lastName']);
+                    if (printTemplateFields.length === 0) {
+                      setAlertConfig({ message: 'يرجى اختيار حقل واحد على الأقل للطباعة', type: 'warning' });
+                      return;
+                    }
+                    localStorage.setItem('printTemplateFields', JSON.stringify(printTemplateFields));
                     setShowPrintTemplateModal(false);
+                    setAlertConfig({ message: 'تم حفظ إعدادات قالب الطباعة بنجاح', type: 'success' });
                   }}
-                  className="flex-1 py-2.5 bg-green-600 text-white rounded-xl font-bold text-sm"
+                  className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-sm transition-colors shadow-sm"
                 >
                   تطبيق وحفظ
                 </button>
                 <button 
+                  type="button"
                   onClick={() => setShowPrintTemplateModal(false)}
-                  className="flex-1 py-2.5 bg-slate-100 rounded-xl font-bold text-sm"
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-colors"
                 >
                   إغلاق
                 </button>
