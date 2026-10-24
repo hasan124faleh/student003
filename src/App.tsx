@@ -510,6 +510,7 @@ export default function App() {
   const [showAddRegModal, setShowAddRegModal] = useState(false);
   const [newRegInput, setNewRegInput] = useState('');
   const [savedStudentName, setSavedStudentName] = useState<{ name: string; page: string; reg: string } | null>(null);
+  const [isMobileSearchActive, setIsMobileSearchActive] = useState(false);
 
   const currentTheme = themeColors[colorTheme] || themeColors.slate;
 
@@ -568,6 +569,7 @@ export default function App() {
         setShowPrintTemplateModal(false);
         setShowShareModal(false);
         setShowPrintSelectedModal(false);
+        setIsMobileSearchActive(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -1107,7 +1109,7 @@ export default function App() {
                   )}
 
                   {view !== 'trash' && (
-                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className={`${(isMobileSearchActive || search.length > 0) ? 'hidden md:grid' : 'grid'} grid-cols-2 lg:grid-cols-3 gap-3`}>
                         <StatCard 
                           title="إجمالي الطلاب" 
                           value={students.filter(s => !s.isDeleted).length} 
@@ -1143,7 +1145,11 @@ export default function App() {
                            className="flex-1 bg-transparent outline-none text-slate-700 h-8 font-bold text-xs" 
                            placeholder="ابحث باسم الطالب... (Ctrl+F)" 
                            value={search} 
-                           onChange={(e) => setSearch(e.target.value)} 
+                           onFocus={() => setIsMobileSearchActive(true)}
+                           onChange={(e) => {
+                             setSearch(e.target.value);
+                             if (e.target.value) setIsMobileSearchActive(true);
+                           }} 
                          />
                          {/* Clear X Button */}
                          {search.length > 0 && (
@@ -1168,12 +1174,44 @@ export default function App() {
                          >
                            {isListening ? <Mic size={16} className="text-red-600" /> : <Mic size={16} />}
                          </button>
+                         {/* Mobile Cancel Search Button */}
+                         {(isMobileSearchActive || search.length > 0) && (
+                           <button
+                             type="button"
+                             onClick={() => {
+                               setSearch('');
+                               setIsMobileSearchActive(false);
+                               searchInputRef.current?.blur();
+                             }}
+                             className="md:hidden text-xs font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-lg transition-colors shrink-0 mr-1"
+                           >
+                             إلغاء
+                           </button>
+                         )}
                      </div>
                   </div>
 
+                  {/* Mobile Search Results Indicator */}
+                  {(isMobileSearchActive || search.length > 0) && (
+                    <div className="md:hidden flex items-center justify-between px-2 py-1 text-xs text-slate-500 font-bold bg-white rounded-xl border border-slate-100 shadow-xs mb-2 animate-fade-in">
+                      <span>{search.trim().length > 0 ? `نتائج البحث: ${filtered.length} طالب` : `قائمة الطلاب (${filtered.length})`}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearch('');
+                          setIsMobileSearchActive(false);
+                          searchInputRef.current?.blur();
+                        }}
+                        className="text-blue-600 hover:underline text-[11px]"
+                      >
+                        إغلاق البحث
+                      </button>
+                    </div>
+                  )}
+
                   {/* Selection Actions */}
                   {selectedStudents.length > 0 && (
-                    <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 flex flex-wrap items-center justify-between gap-2 animate-fade-in">
+                    <div className={`${(isMobileSearchActive || search.length > 0) ? 'hidden md:flex' : 'flex'} bg-blue-50 p-3 rounded-xl border border-blue-200 flex-wrap items-center justify-between gap-2 animate-fade-in`}>
                       <span className="text-xs font-bold text-blue-700">تم تحديد {selectedStudents.length} طالب</span>
                       <div className="flex flex-wrap gap-2">
                         <button 
@@ -1205,7 +1243,7 @@ export default function App() {
                   )}
 
                   {/* Filters */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-center mb-4">
+                  <div className={`${(isMobileSearchActive || search.length > 0) ? 'hidden md:grid' : 'grid'} grid-cols-2 md:grid-cols-4 gap-2 items-center mb-4`}>
                       <select value={selectedRegFilter} onChange={(e) => setSelectedRegFilter(e.target.value)} className="bg-white rounded-lg px-2 py-2 border border-slate-200 text-xs font-bold outline-none h-9">
                           <option value="">جميع القيود</option>
                           {Array.from(new Set(students.filter(s => !s.isDeleted).map(s => s.regNumber))).sort((a,b) => Number(a)-Number(b)).map(r => (
@@ -1231,7 +1269,7 @@ export default function App() {
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex flex-wrap gap-2">
+                  <div className={`${(isMobileSearchActive || search.length > 0) ? 'hidden md:flex' : 'flex'} flex-wrap gap-2`}>
                         <button 
                           onClick={() => { setSelectedId(null); setView('add'); setSimilarStudents([]); }} 
                           data-tooltip="إضافة طالب جديد (Ctrl+N)"
@@ -1257,7 +1295,7 @@ export default function App() {
 
                   {/* ALPHABET NAVIGATION (Fast Letter Jump) */}
                   {sortBy === 'alphabetical' && !debouncedQuery && alphabetLetters.length > 0 && (
-                    <div className="alphabet-nav">
+                    <div className={`${(isMobileSearchActive || search.length > 0) ? 'hidden md:flex' : 'flex'} alphabet-nav`}>
                       {alphabetLetters.map(letter => (
                         <button
                           key={letter}
@@ -1569,6 +1607,15 @@ export default function App() {
                           </div>
                         </div>
                       ))
+                    )}
+                    {filtered.length === 0 && (
+                      <div className="text-center py-12 bg-white rounded-2xl border border-slate-100 p-6 shadow-xs animate-fade-in">
+                        <div className="w-12 h-12 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <Search size={22} />
+                        </div>
+                        <div className="font-bold text-slate-700 text-sm">لا توجد نتائج مطابقة للبحث</div>
+                        <div className="text-xs text-slate-400 mt-1">تأكد من كتابة الاسم بشكل صحيح</div>
+                      </div>
                     )}
                   </div>
                   <div ref={loadMoreRef} className="h-10"></div>
