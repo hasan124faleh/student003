@@ -35,10 +35,13 @@
         font-family: 'Cairo', sans-serif;
         background-color: #f8fafc;
         color: #1e293b;
-        overflow-x: hidden !important;
-        max-width: 100vw !important;
-        width: 100% !important;
+        overflow-x: hidden;
+        max-width: 100vw;
+        width: 100%;
         position: relative;
+      }
+      .print-only { 
+        display: none; 
       }
       /* Tooltip Styles */
       [data-tooltip] {
@@ -86,7 +89,8 @@
             color: black !important;
             overflow: visible !important;
             height: auto !important;
-            width: 210mm;
+            max-width: none !important;
+            width: 210mm !important;
         }
         
         .no-print { display: none !important; }
@@ -136,7 +140,6 @@
             print-color-adjust: exact;
         }
       }
-      .print-only { display: none !important; }
       
       /* Scrollbars */
       ::-webkit-scrollbar { width: 8px; }
@@ -771,7 +774,6 @@
           const [importing, setImporting] = useState(false);
           const [importProgress, setImportProgress] = useState(0);
           const [printMode, setPrintMode] = useState('list');
-          const [isPrinting, setIsPrinting] = useState(false);
           const [alertConfig, setAlertConfig] = useState(null);
           const [confirmConfig, setConfirmConfig] = useState(null);
           const [showScrollTop, setShowScrollTop] = useState(false);
@@ -869,15 +871,6 @@
             };
             window.addEventListener('keydown', handleKeyDown);
             return () => window.removeEventListener('keydown', handleKeyDown);
-          }, []);
-
-          // Print state listener
-          useEffect(() => {
-            const handleAfterPrint = () => {
-              setIsPrinting(false);
-            };
-            window.addEventListener('afterprint', handleAfterPrint);
-            return () => window.removeEventListener('afterprint', handleAfterPrint);
           }, []);
 
           useEffect(() => {
@@ -1332,11 +1325,7 @@
               return;
             }
             setPrintMode('selected');
-            setIsPrinting(true);
-            setTimeout(() => {
-              window.print();
-              setTimeout(() => setIsPrinting(false), 1000);
-            }, 500);
+            setTimeout(() => window.print(), 500);
             setShowPrintSelectedModal(false);
           };
 
@@ -2570,11 +2559,7 @@
                               setPrintMode('list'); 
                               setPrintRegInput(''); 
                               setShowPrintModal(false); 
-                              setIsPrinting(true);
-                              setTimeout(() => {
-                                window.print();
-                                setTimeout(() => setIsPrinting(false), 1000);
-                              }, 500);
+                              setTimeout(() => window.print(), 500); 
                             }} 
                             className={`w-full py-2.5 ${currentTheme.primary} ${currentTheme.hover} text-white rounded-xl font-bold transition-colors text-sm`}
                           >
@@ -2592,11 +2577,7 @@
                               setPrintMode('list'); 
                               setSelectedRegFilter(printRegInput); 
                               setShowPrintModal(false); 
-                              setIsPrinting(true);
-                              setTimeout(() => {
-                                window.print();
-                                setTimeout(() => setIsPrinting(false), 1000);
-                              }, 500);
+                              setTimeout(() => window.print(), 500); 
                             }} 
                             className={`w-full py-2.5 ${currentTheme.secondary} ${currentTheme.secondaryHover} text-white rounded-xl font-bold disabled:opacity-50 transition-colors text-sm`} 
                             disabled={!printRegInput}
@@ -2669,11 +2650,7 @@
                               onClick={() => { 
                                 setSelectedId(s.id); 
                                 setPrintMode('single'); 
-                                setIsPrinting(true);
-                                setTimeout(() => {
-                                  window.print();
-                                  setTimeout(() => setIsPrinting(false), 1000);
-                                }, 500);
+                                setTimeout(() => window.print(), 500); 
                               }} 
                               className={`w-full ${currentTheme.secondary} ${currentTheme.secondaryHover} text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg text-sm`}
                             >
@@ -2737,13 +2714,9 @@
                 )}
               </div>
               
-              {isPrinting && (
-                <>
-                  {printMode === 'list' && <PrintView students={filtered} title={selectedRegFilter ? `كشف الطلاب - قيد رقم ${selectedRegFilter}` : "كشف القيد العام"} selectedFields={printTemplateFields} />}
-                  {printMode === 'single' && students.find(s=>s.id===selectedId) && <SingleStudentPrint student={students.find(s=>s.id===selectedId)} />}
-                  {printMode === 'selected' && <PrintView students={students.filter(s => selectedStudents.includes(s.id) && !s.isDeleted)} title="الطلاب المحددين" selectedFields={printTemplateFields} />}
-                </>
-              )}
+              {printMode === 'list' && <PrintView students={filtered} title={selectedRegFilter ? `كشف الطلاب - قيد رقم ${selectedRegFilter}` : "كشف القيد العام"} selectedFields={printTemplateFields} />}
+              {printMode === 'single' && students.find(s=>s.id===selectedId) && <SingleStudentPrint student={students.find(s=>s.id===selectedId)} />}
+              {printMode === 'selected' && <PrintView students={students.filter(s => selectedStudents.includes(s.id) && !s.isDeleted)} title="الطلاب المحددين" selectedFields={printTemplateFields} />}
             </>
           );
         };

@@ -442,7 +442,6 @@ export default function App() {
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [printMode, setPrintMode] = useState<'list' | 'single' | 'selected'>('list');
-  const [isPrinting, setIsPrinting] = useState(false);
   const [alertConfig, setAlertConfig] = useState<{ message: string; type: 'error' | 'success' | 'warning' } | null>(null);
   const [confirmConfig, setConfirmConfig] = useState<{ title: string; message: string; onConfirm: () => void; isDestructive?: boolean } | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -543,15 +542,6 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  // Print state listener
-  useEffect(() => {
-    const handleAfterPrint = () => {
-      setIsPrinting(false);
-    };
-    window.addEventListener('afterprint', handleAfterPrint);
-    return () => window.removeEventListener('afterprint', handleAfterPrint);
   }, []);
 
   // Online/Offline detection
@@ -1013,11 +1003,7 @@ export default function App() {
       return;
     }
     setPrintMode('selected');
-    setIsPrinting(true);
-    setTimeout(() => {
-      window.print();
-      setTimeout(() => setIsPrinting(false), 1000);
-    }, 500);
+    setTimeout(() => window.print(), 500);
     setShowPrintSelectedModal(false);
   };
 
@@ -2270,11 +2256,7 @@ export default function App() {
                       setPrintMode('list'); 
                       setPrintRegInput(''); 
                       setShowPrintModal(false); 
-                      setIsPrinting(true);
-                      setTimeout(() => {
-                        window.print();
-                        setTimeout(() => setIsPrinting(false), 1000);
-                      }, 500);
+                      setTimeout(() => window.print(), 500); 
                     }} 
                     className={`w-full py-2.5 ${currentTheme.primary} ${currentTheme.hover} text-white rounded-xl font-bold transition-colors text-sm`}
                   >
@@ -2292,11 +2274,7 @@ export default function App() {
                       setPrintMode('list'); 
                       setSelectedRegFilter(printRegInput); 
                       setShowPrintModal(false); 
-                      setIsPrinting(true);
-                      setTimeout(() => {
-                        window.print();
-                        setTimeout(() => setIsPrinting(false), 1000);
-                      }, 500);
+                      setTimeout(() => window.print(), 500); 
                     }} 
                     className={`w-full py-2.5 ${currentTheme.secondary} ${currentTheme.secondaryHover} text-white rounded-xl font-bold disabled:opacity-50 transition-colors text-sm`} 
                     disabled={!printRegInput}
@@ -2369,11 +2347,7 @@ export default function App() {
                       onClick={() => { 
                         setSelectedId(s.id); 
                         setPrintMode('single'); 
-                        setIsPrinting(true);
-                        setTimeout(() => {
-                          window.print();
-                          setTimeout(() => setIsPrinting(false), 1000);
-                        }, 500);
+                        setTimeout(() => window.print(), 500); 
                       }} 
                       className={`w-full ${currentTheme.secondary} ${currentTheme.secondaryHover} text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg text-sm`}
                     >
@@ -2437,13 +2411,9 @@ export default function App() {
         )}
       </div>
       
-      {isPrinting && (
-        <>
-          {printMode === 'list' && <PrintView students={filtered} title={selectedRegFilter ? `كشف الطلاب - قيد رقم ${selectedRegFilter}` : "كشف القيد العام"} selectedFields={printTemplateFields} />}
-          {printMode === 'single' && students.find(s=>s.id===selectedId) && <SingleStudentPrint student={students.find(s=>s.id===selectedId)!} />}
-          {printMode === 'selected' && <PrintView students={students.filter(s => selectedStudents.includes(s.id) && !s.isDeleted)} title="الطلاب المحددين" selectedFields={printTemplateFields} />}
-        </>
-      )}
+      {printMode === 'list' && <PrintView students={filtered} title={selectedRegFilter ? `كشف الطلاب - قيد رقم ${selectedRegFilter}` : "كشف القيد العام"} selectedFields={printTemplateFields} />}
+      {printMode === 'single' && students.find(s=>s.id===selectedId) && <SingleStudentPrint student={students.find(s=>s.id===selectedId)!} />}
+      {printMode === 'selected' && <PrintView students={students.filter(s => selectedStudents.includes(s.id) && !s.isDeleted)} title="الطلاب المحددين" selectedFields={printTemplateFields} />}
     </>
   );
 }

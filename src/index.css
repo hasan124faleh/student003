@@ -4,10 +4,14 @@ html, body {
   font-family: 'Cairo', sans-serif;
   background-color: #f8fafc;
   color: #1e293b;
-  overflow-x: hidden !important;
-  max-width: 100vw !important;
-  width: 100% !important;
+  overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
   position: relative;
+}
+
+.print-only { 
+  display: none; 
 }
 
 /* Tooltip Styles */
@@ -56,7 +60,8 @@ html, body {
       color: black !important;
       overflow: visible !important;
       height: auto !important;
-      width: 210mm;
+      max-width: none !important;
+      width: 210mm !important;
   }
   
   .no-print { display: none !important; }
@@ -69,7 +74,7 @@ html, body {
       box-sizing: border-box;
       page-break-after: always;
       break-after: page;
-      display: flex;
+      display: flex !important;
       flex-direction: column;
       justify-content: flex-start;
       align-items: stretch;
@@ -106,7 +111,6 @@ html, body {
       print-color-adjust: exact;
   }
 }
-.print-only { display: none !important; }
 
 /* Scrollbars */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
