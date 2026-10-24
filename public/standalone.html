@@ -1892,10 +1892,18 @@
                                         onClick={() => { if(view !== 'trash') { setSelectedId(s.id); setView('detail'); }}}
                                       >
                                         <div className={`absolute top-0 bottom-0 left-0 w-1 ${s.status === 'graduated' ? 'bg-blue-500' : s.status === 'left' ? 'bg-rose-500' : s.status === 'transferred' ? 'bg-amber-500' : 'bg-emerald-500'}`}></div>
-                                        <h3 className="font-bold text-slate-800 text-sm group-hover:text-blue-700 transition-colors flex items-center mr-8">
-                                           <span className="text-slate-400 font-mono ml-2 text-xs bg-slate-50 px-1.5 py-0.5 rounded-md border border-slate-100">#{idx + 1}</span>
-                                           {cleanName(s.firstName)}{s.lastName ? <span className="text-slate-500 mr-1">/ {s.lastName}</span> : ''}
-                                        </h3>
+                                        <div className="flex items-start gap-2 mr-8">
+                                           <span className="text-slate-400 font-mono text-xs bg-slate-50 px-1.5 py-0.5 rounded-md border border-slate-100 shrink-0 mt-0.5">#{idx + 1}</span>
+                                           <h3 className="font-bold text-slate-800 text-sm group-hover:text-blue-700 transition-colors leading-relaxed flex-1 min-w-0">
+                                              <span>{cleanName(s.firstName)}</span>
+                                              {s.lastName && (
+                                                <span className="inline-flex items-center gap-1 mr-1.5 px-2 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800 whitespace-nowrap align-middle">
+                                                  <span>/</span>
+                                                  <span>{s.lastName}</span>
+                                                </span>
+                                              )}
+                                           </h3>
+                                        </div>
                                         {/* SWAPPED: صفحة {s.pageNumber} before قيد {s.regNumber} */}
                                         <div className="mt-2 flex flex-wrap gap-2 border-t border-slate-100 pt-2 mr-8">
                                             <span className="bg-[#FFA500] text-white px-2 py-0.5 rounded text-xs font-bold shadow-sm">صفحة {s.pageNumber}</span>
@@ -1943,10 +1951,18 @@
                                     onClick={() => { if(view !== 'trash') { setSelectedId(s.id); setView('detail'); }}}
                                   >
                                     <div className={`absolute top-0 bottom-0 left-0 w-1 ${s.status === 'graduated' ? 'bg-blue-500' : s.status === 'left' ? 'bg-rose-500' : s.status === 'transferred' ? 'bg-amber-500' : 'bg-emerald-500'}`}></div>
-                                    <h3 className="font-bold text-slate-800 text-sm group-hover:text-blue-700 transition-colors flex items-center mr-8">
-                                       <span className="text-slate-400 font-mono ml-2 text-xs bg-slate-50 px-1.5 py-0.5 rounded-md border border-slate-100">#{idx + 1}</span>
-                                       {cleanName(s.firstName)}{s.lastName ? <span className="text-slate-500 mr-1">/ {s.lastName}</span> : ''}
-                                    </h3>
+                                    <div className="flex items-start gap-2 mr-8">
+                                       <span className="text-slate-400 font-mono text-xs bg-slate-50 px-1.5 py-0.5 rounded-md border border-slate-100 shrink-0 mt-0.5">#{idx + 1}</span>
+                                       <h3 className="font-bold text-slate-800 text-sm group-hover:text-blue-700 transition-colors leading-relaxed flex-1 min-w-0">
+                                          <span>{cleanName(s.firstName)}</span>
+                                          {s.lastName && (
+                                            <span className="inline-flex items-center gap-1 mr-1.5 px-2 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800 whitespace-nowrap align-middle">
+                                              <span>/</span>
+                                              <span>{s.lastName}</span>
+                                            </span>
+                                          )}
+                                       </h3>
+                                    </div>
                                     {/* SWAPPED: صفحة {s.pageNumber} before قيد {s.regNumber} */}
                                     <div className="mt-2 flex flex-wrap gap-2 border-t border-slate-100 pt-2 mr-8">
                                         <span className="bg-[#FFA500] text-white px-2 py-0.5 rounded text-xs font-bold shadow-sm">صفحة {s.pageNumber}</span>
