@@ -419,6 +419,10 @@
             'رقم الصفحة': s.pageNumber,
             'رقم القيد': s.regNumber,
             'الحالة الدراسية': statusMap[s.status || 'active'] || 'مستمر',
+            'تاريخ الوثيقة': s.docDate || '',
+            'الصف الذي انتقل فيه': s.transferGrade || '',
+            'الجهة الصادرة إليها': s.docDestination || '',
+            'الغرض من الوثيقة': s.docPurpose || '',
             'ملاحظات': s.notes || '',
             'تاريخ التسجيل': new Date(s.createdAt).toLocaleDateString('ar-EG')
           }));
@@ -612,6 +616,30 @@
                          <span className="text-base font-bold text-slate-500 mb-1">تاريخ القيد</span>
                          <span className="text-2xl font-bold text-slate-900 font-mono">{new Date(student.createdAt).toLocaleDateString('ar-EG')}</span>
                       </div>
+                      {student.status === 'transferred' && (
+                        <div className="col-span-2 bg-slate-50 p-3.5 rounded-xl border border-slate-300 mt-1 grid grid-cols-2 gap-3 text-right">
+                           <div className="col-span-2 text-sm font-black text-slate-900 border-b border-slate-300 pb-1 flex items-center justify-between">
+                             <span>بيانات النقل والوثيقة الصادرة</span>
+                             <span className="text-xs bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded font-bold">طالب منقول</span>
+                           </div>
+                           <div>
+                             <span className="text-xs font-bold text-slate-600 block">تاريخ الوثيقة:</span>
+                             <span className="text-base font-bold text-slate-900 font-mono">{student.docDate || '—'}</span>
+                           </div>
+                           <div>
+                             <span className="text-xs font-bold text-slate-600 block">الصف الذي انتقل فيه:</span>
+                             <span className="text-base font-bold text-slate-900">{student.transferGrade || '—'}</span>
+                           </div>
+                           <div>
+                             <span className="text-xs font-bold text-slate-600 block">الجهة الصادرة إليها:</span>
+                             <span className="text-base font-bold text-slate-900">{student.docDestination || '—'}</span>
+                           </div>
+                           <div>
+                             <span className="text-xs font-bold text-slate-600 block">الغرض من الوثيقة:</span>
+                             <span className="text-base font-bold text-slate-900">{student.docPurpose || '—'}</span>
+                           </div>
+                        </div>
+                      )}
                       {student.notes && (
                         <div className="col-span-2 flex flex-col bg-yellow-50 p-3 rounded-xl border border-yellow-200 mt-1">
                            <span className="text-xs font-bold text-yellow-700 mb-1">ملاحظات</span>
@@ -800,6 +828,9 @@
           const [shareStudents, setShareStudents] = useState([]);
           const [showPrintSelectedModal, setShowPrintSelectedModal] = useState(false);
           const [editFormData, setEditFormData] = useState(null);
+          const [formStatus, setFormStatus] = useState('active');
+          const [docPurposeType, setDocPurposeType] = useState('إكمال الدراسة');
+          const [customDocPurpose, setCustomDocPurpose] = useState('');
           const [customRegs, setCustomRegs] = useState(() => {
             try { return JSON.parse(localStorage.getItem('customRegs') || '[]'); } catch { return []; }
           });
@@ -1051,10 +1082,27 @@
                   pageNumber: student.pageNumber,
                   regNumber: student.regNumber,
                   status: student.status || 'active',
+                  docDate: student.docDate || '',
+                  docDestination: student.docDestination || '',
+                  docPurpose: student.docPurpose || '',
+                  transferGrade: student.transferGrade || '',
                   notes: student.notes || '',
                   createdAt: formatDateForInput(student.createdAt)
                 });
+                setFormStatus(student.status || 'active');
+                const p = student.docPurpose || '';
+                if (p && p !== 'إكمال الدراسة') {
+                  setDocPurposeType('أخرى');
+                  setCustomDocPurpose(p);
+                } else {
+                  setDocPurposeType('إكمال الدراسة');
+                  setCustomDocPurpose('');
+                }
               }
+            } else if (view === 'add') {
+              setFormStatus('active');
+              setDocPurposeType('إكمال الدراسة');
+              setCustomDocPurpose('');
             }
           }, [view, selectedId, students]);
 
@@ -1263,6 +1311,13 @@
               text += `└ 🎓 الحالة: ${statusMap[s.status || 'active']}`;
               text += `\n└ 📅 تاريخ القيد: ${new Date(s.createdAt).toLocaleDateString('ar-EG')}\n`;
               
+              if (s.status === 'transferred') {
+                if (s.docDate) text += `└ 📅 تاريخ الوثيقة: ${s.docDate}\n`;
+                if (s.transferGrade) text += `└ 🎒 الصف الذي انتقل فيه: ${s.transferGrade}\n`;
+                if (s.docDestination) text += `└ 🏛️ الجهة الصادرة إليها: ${s.docDestination}\n`;
+                if (s.docPurpose) text += `└ 🎯 الغرض من الوثيقة: ${s.docPurpose}\n`;
+              }
+
               if (s.notes) {
                 text += `└ 📝 ملاحظات: ${s.notes}\n`;
               }
@@ -2027,13 +2082,26 @@
 
                             const fName = form.get('firstName');
                             const lName = form.get('lastName');
+                            const st = form.get('status') || 'active';
+                            let purpose = '';
+                            if (st === 'transferred') {
+                              if (docPurposeType === 'أخرى') {
+                                purpose = String(form.get('customDocPurpose') || '').trim() || 'أخرى';
+                              } else {
+                                purpose = 'إكمال الدراسة';
+                              }
+                            }
                             const data = {
                                 firstName: fName,
                                 lastName: lName,
                                 pageNumber: pageNum,
                                 regNumber: regNum,
                                 notes: form.get('notes'),
-                                status: form.get('status') || 'active',
+                                status: st,
+                                docDate: st === 'transferred' ? String(form.get('docDate') || '').trim() : '',
+                                docDestination: st === 'transferred' ? String(form.get('docDestination') || '').trim() : '',
+                                docPurpose: purpose,
+                                transferGrade: st === 'transferred' ? String(form.get('transferGrade') || '').trim() : '',
                                 isDeleted: false,
                                 createdAt: view === 'edit' ? new Date(form.get('createdAt')).getTime() : Date.now()
                             };
@@ -2050,6 +2118,9 @@
                                     setSavedStudentName({ name: `${cleanName(fName)} ${lName || ''}`.trim(), page: pageNum, reg: regNum });
                                     setAlertConfig({ message: 'تم إضافة الطالب بنجاح', type: 'success' });
                                     e.target.reset();
+                                    setFormStatus('active');
+                                    setDocPurposeType('إكمال الدراسة');
+                                    setCustomDocPurpose('');
                                     setSimilarStudents([]);
                                 }
                                 await refreshStats();
@@ -2144,7 +2215,7 @@
                                      <option key={r} value={r}>قيد {r}</option>
                                    ))}
                                  </datalist>
-                               </div>
+                                </div>
                              </div>
                            </div>
 
@@ -2153,23 +2224,162 @@
                               <label className="block text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">الوضع الأكاديمي</label>
                               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                                 <label className="cursor-pointer group">
-                                    <input type="radio" name="status" value="active" className="peer hidden" defaultChecked={view==='add' ? true : editFormData?.status === 'active'} />
+                                    <input 
+                                      type="radio" 
+                                      name="status" 
+                                      value="active" 
+                                      className="peer hidden" 
+                                      checked={formStatus === 'active'} 
+                                      onChange={() => setFormStatus('active')}
+                                    />
                                     <div className="py-2 px-1 rounded-xl border-2 border-slate-100 text-center font-bold text-xs text-slate-500 peer-checked:bg-emerald-500 peer-checked:text-white peer-checked:border-emerald-500 transition-all">مستمر</div>
                                 </label>
                                 <label className="cursor-pointer group">
-                                    <input type="radio" name="status" value="transferred" className="peer hidden" defaultChecked={editFormData?.status === 'transferred'} />
+                                    <input 
+                                      type="radio" 
+                                      name="status" 
+                                      value="transferred" 
+                                      className="peer hidden" 
+                                      checked={formStatus === 'transferred'} 
+                                      onChange={() => setFormStatus('transferred')}
+                                    />
                                     <div className="py-2 px-1 rounded-xl border-2 border-slate-100 text-center font-bold text-xs text-slate-500 peer-checked:bg-amber-500 peer-checked:text-white peer-checked:border-amber-500 transition-all">منقول</div>
                                 </label>
                                 <label className="cursor-pointer group">
-                                    <input type="radio" name="status" value="left" className="peer hidden" defaultChecked={editFormData?.status === 'left'} />
+                                    <input 
+                                      type="radio" 
+                                      name="status" 
+                                      value="left" 
+                                      className="peer hidden" 
+                                      checked={formStatus === 'left'} 
+                                      onChange={() => setFormStatus('left')}
+                                    />
                                     <div className="py-2 px-1 rounded-xl border-2 border-slate-100 text-center font-bold text-xs text-slate-500 peer-checked:bg-rose-500 peer-checked:text-white peer-checked:border-rose-500 transition-all">تارك</div>
                                 </label>
                                 <label className="cursor-pointer group">
-                                    <input type="radio" name="status" value="graduated" className="peer hidden" defaultChecked={editFormData?.status === 'graduated'} />
+                                    <input 
+                                      type="radio" 
+                                      name="status" 
+                                      value="graduated" 
+                                      className="peer hidden" 
+                                      checked={formStatus === 'graduated'} 
+                                      onChange={() => setFormStatus('graduated')}
+                                    />
                                     <div className="py-2 px-1 rounded-xl border-2 border-slate-100 text-center font-bold text-xs text-slate-500 peer-checked:bg-blue-500 peer-checked:text-white peer-checked:border-blue-500 transition-all">متخرج</div>
                                 </label>
                               </div>
                            </div>
+
+                           {/* الحقول الخاصة بالطالب المنقول */}
+                           {formStatus === 'transferred' && (
+                             <div className="bg-amber-50/80 border-2 border-amber-300/80 rounded-2xl p-3.5 space-y-3 animate-slide-up shadow-xs">
+                               <div className="flex items-center gap-2 text-amber-900 font-bold text-xs border-b border-amber-200 pb-1.5">
+                                 <FileText size={15} className="text-amber-600" />
+                                 <span>بيانات النقل والوثيقة الرسمية</span>
+                               </div>
+
+                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                 <div>
+                                   <label className="block text-[11px] font-bold text-amber-900 mb-1">تاريخ الوثيقة</label>
+                                   <input 
+                                     type="date"
+                                     name="docDate" 
+                                     defaultValue={editFormData?.docDate || ''} 
+                                     className="w-full p-2.5 rounded-xl bg-white border border-amber-200 outline-none font-bold text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500" 
+                                   />
+                                 </div>
+
+                                 <div>
+                                   <label className="block text-[11px] font-bold text-amber-900 mb-1">الصف الذي انتقل فيه</label>
+                                   <select 
+                                     name="transferGrade" 
+                                     defaultValue={editFormData?.transferGrade || ''} 
+                                     className="w-full p-2.5 rounded-xl bg-white border border-amber-200 outline-none font-bold text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                                   >
+                                     <option value="">اختر الصف...</option>
+                                     <optgroup label="المرحلة المتوسطة">
+                                       <option value="الأول متوسط">الأول متوسط</option>
+                                       <option value="الثاني متوسط">الثاني متوسط</option>
+                                       <option value="الثالث متوسط">الثالث متوسط</option>
+                                     </optgroup>
+                                     <optgroup label="الفرع العلمي">
+                                       <option value="الرابع علمي">الرابع علمي</option>
+                                       <option value="الخامس علمي">الخامس علمي</option>
+                                       <option value="السادس علمي">السادس علمي</option>
+                                     </optgroup>
+                                     <optgroup label="الفرع الأدبي">
+                                       <option value="الرابع أدبي">الرابع أدبي</option>
+                                       <option value="الخامس أدبي">الخامس أدبي</option>
+                                       <option value="السادس أدبي">السادس أدبي</option>
+                                     </optgroup>
+                                     {editFormData?.transferGrade && ![
+                                       'الأول متوسط', 'الثاني متوسط', 'الثالث متوسط',
+                                       'الرابع علمي', 'الخامس علمي', 'السادس علمي',
+                                       'الرابع أدبي', 'الخامس أدبي', 'السادس أدبي'
+                                     ].includes(editFormData.transferGrade) && (
+                                       <option value={editFormData.transferGrade}>{editFormData.transferGrade}</option>
+                                     )}
+                                   </select>
+                                 </div>
+
+                                 <div className="sm:col-span-2">
+                                   <label className="block text-[11px] font-bold text-amber-900 mb-1">الجهة الصادرة إليها</label>
+                                   <input 
+                                     type="text" 
+                                     name="docDestination" 
+                                     defaultValue={editFormData?.docDestination || ''} 
+                                     placeholder="المدرسة أو المديرية المنقول إليها" 
+                                     className="w-full p-2.5 rounded-xl bg-white border border-amber-200 outline-none font-bold text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500" 
+                                   />
+                                 </div>
+
+                                 <div className="sm:col-span-2 space-y-2">
+                                   <label className="block text-[11px] font-bold text-amber-900 mb-1">الغرض من الوثيقة</label>
+                                   <div className="grid grid-cols-2 gap-2">
+                                     <label className="cursor-pointer">
+                                       <input 
+                                         type="radio" 
+                                         name="docPurposeOption" 
+                                         value="إكمال الدراسة" 
+                                         className="peer hidden" 
+                                         checked={docPurposeType === 'إكمال الدراسة'} 
+                                         onChange={() => setDocPurposeType('إكمال الدراسة')} 
+                                       />
+                                       <div className="py-2 px-2 rounded-xl border-2 border-slate-200 text-center font-bold text-xs text-slate-600 peer-checked:bg-amber-500 peer-checked:text-white peer-checked:border-amber-500 transition-all bg-white shadow-xs">
+                                         إكمال الدراسة
+                                       </div>
+                                     </label>
+                                     <label className="cursor-pointer">
+                                       <input 
+                                         type="radio" 
+                                         name="docPurposeOption" 
+                                         value="أخرى" 
+                                         className="peer hidden" 
+                                         checked={docPurposeType === 'أخرى'} 
+                                         onChange={() => setDocPurposeType('أخرى')} 
+                                       />
+                                       <div className="py-2 px-2 rounded-xl border-2 border-slate-200 text-center font-bold text-xs text-slate-600 peer-checked:bg-amber-500 peer-checked:text-white peer-checked:border-amber-500 transition-all bg-white shadow-xs">
+                                         أخرى
+                                       </div>
+                                     </label>
+                                   </div>
+
+                                   {docPurposeType === 'أخرى' && (
+                                     <div className="animate-slide-up pt-1">
+                                       <input 
+                                         type="text" 
+                                         name="customDocPurpose" 
+                                         defaultValue={customDocPurpose} 
+                                         placeholder="اكتب الغرض من الوثيقة هنا..." 
+                                         className="w-full p-2.5 rounded-xl bg-white border border-amber-300 outline-none font-bold text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500" 
+                                         autoFocus
+                                       />
+                                     </div>
+                                   )}
+                                 </div>
+                               </div>
+                             </div>
+                           )}
 
                            <input name="notes" defaultValue={editFormData?.notes || ''} className={`w-full p-2.5 rounded-xl bg-slate-50 outline-none border ${currentTheme.ring} font-bold text-sm`} placeholder="ملاحظات (اختياري)" />
                            <div className="flex gap-2">
@@ -2507,6 +2717,17 @@
                                   <span className="share-detail-label">📅 تاريخ القيد:</span>
                                   <span className="share-detail-value">{new Date(s.createdAt).toLocaleDateString('ar-EG')}</span>
                                 </div>
+                                {s.status === 'transferred' && (
+                                  <div className="share-detail-item col-span-2 bg-amber-50/80 p-2.5 rounded-xl border border-amber-200 mt-1">
+                                    <div className="text-[11px] font-bold text-amber-900 mb-1">📋 بيانات النقل والوثيقة:</div>
+                                    <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-800">
+                                      {s.docDate && <div>📅 تاريخ الوثيقة: <span className="font-bold">{s.docDate}</span></div>}
+                                      {s.transferGrade && <div>🎒 الصف الذي انتقل فيه: <span className="font-bold">{s.transferGrade}</span></div>}
+                                      {s.docDestination && <div>🏛️ الجهة الصادرة إليها: <span className="font-bold">{s.docDestination}</span></div>}
+                                      {s.docPurpose && <div>🎯 الغرض من الوثيقة: <span className="font-bold">{s.docPurpose}</span></div>}
+                                    </div>
+                                  </div>
+                                )}
                                 {s.notes && (
                                   <div className="share-detail-item col-span-2">
                                     <span className="share-detail-label">📝 ملاحظات:</span>
@@ -2638,6 +2859,37 @@
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* بيانات النقل والوثيقة */}
+                                {(s.status === 'transferred' || s.docDestination || s.docDate) && (
+                                  <div className="pt-3 border-t border-slate-200">
+                                    <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3.5 space-y-2.5">
+                                      <div className="text-xs font-bold text-amber-900 flex items-center gap-1.5 border-b border-amber-200 pb-1.5">
+                                        <FileText size={15} className="text-amber-600" />
+                                        <span>بيانات النقل والوثيقة الرسمية</span>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-2 text-xs">
+                                        <div>
+                                          <span className="text-[10px] font-bold text-amber-800 block">تاريخ الوثيقة:</span>
+                                          <span className="font-bold text-slate-800 font-mono">{s.docDate || '—'}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-[10px] font-bold text-amber-800 block">الصف الذي انتقل فيه:</span>
+                                          <span className="font-bold text-slate-800">{s.transferGrade || '—'}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-[10px] font-bold text-amber-800 block">الجهة الصادرة إليها:</span>
+                                          <span className="font-bold text-slate-800">{s.docDestination || '—'}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-[10px] font-bold text-amber-800 block">الغرض من الوثيقة:</span>
+                                          <span className="font-bold text-slate-800">{s.docPurpose || '—'}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
                                 {s.notes && (
                                     <div className="pt-3 border-t border-slate-200">
                                         <div className="text-[10px] font-bold text-slate-400 mb-1">ملاحظات</div>
