@@ -757,11 +757,22 @@
            students, 
            selectedYear, 
            sortBy = 'byDate',
-           orientation = 'portrait'
+           orientation = 'landscape'
          }) => {
            const isPortrait = orientation === 'portrait';
 
            useEffect(() => {
+             let styleEl = document.getElementById('docs-page-orientation-style');
+             if (!styleEl) {
+               styleEl = document.createElement('style');
+               styleEl.id = 'docs-page-orientation-style';
+               document.head.appendChild(styleEl);
+             }
+             
+             styleEl.innerHTML = isPortrait 
+               ? `@page { size: A4 portrait; margin: 4mm 4mm; }`
+               : `@page { size: A4 landscape; margin: 4mm 5mm; }`;
+
              if (!isPortrait) {
                document.body.classList.add('print-landscape');
              } else {
@@ -769,6 +780,9 @@
              }
              return () => {
                document.body.classList.remove('print-landscape');
+               if (styleEl && styleEl.parentNode) {
+                 styleEl.parentNode.removeChild(styleEl);
+               }
              };
            }, [isPortrait]);
 
@@ -815,8 +829,8 @@
              });
            }, [students, selectedYear, sortBy]);
 
-           // Increased rows per page now that signatures footer is deleted to maximize space for names!
-           const ROWS_PER_PAGE = isPortrait ? 30 : 22;
+           // 30 names per page
+           const ROWS_PER_PAGE = 30;
            const totalItems = transferredStudents.length;
            const totalPages = Math.ceil(totalItems / ROWS_PER_PAGE) || 1;
            const printDate = new Date().toLocaleDateString('ar-EG');
@@ -833,8 +847,8 @@
              <div className="print-only text-[10pt] dir-rtl font-cairo">
                <style>{`
                  @page {
-                   size: ${isPortrait ? 'portrait' : 'landscape'};
-                   margin: 4mm 5mm;
+                   size: ${isPortrait ? 'A4 portrait' : 'A4 landscape'};
+                   margin: ${isPortrait ? '4mm 4mm' : '4mm 5mm'};
                  }
                  @media print {
                    html, body {
@@ -846,6 +860,7 @@
                      height: auto !important;
                      background: white !important;
                      color: black !important;
+                     overflow: visible !important;
                    }
                    .no-print {
                      display: none !important;
@@ -854,15 +869,18 @@
                      display: block !important;
                    }
                    .docs-print-page {
-                     width: ${isPortrait ? '200mm' : '287mm'} !important;
-                     min-height: ${isPortrait ? '287mm' : '198mm'} !important;
+                     width: ${isPortrait ? '202mm' : '287mm'} !important;
+                     height: ${isPortrait ? '287mm' : '201mm'} !important;
+                     max-height: ${isPortrait ? '287mm' : '201mm'} !important;
                      box-sizing: border-box !important;
                      page-break-after: always !important;
                      break-after: page !important;
+                     page-break-inside: avoid !important;
+                     break-inside: avoid !important;
                      display: flex !important;
                      flex-direction: column !important;
                      justify-content: space-between !important;
-                     padding: 3mm 4mm !important;
+                     padding: ${isPortrait ? '2mm 3mm' : '1.5mm 3mm'} !important;
                      background: white !important;
                      overflow: hidden !important;
                    }
@@ -876,17 +894,28 @@
                      table-layout: fixed !important;
                    }
                    .docs-table th, .docs-table td {
-                     border: 1.5px solid #0f172a !important;
-                     padding: ${isPortrait ? '3px 4px' : '4px 6px'} !important;
+                     border: 1px solid #0f172a !important;
                      color: #0f172a !important;
-                     font-size: ${isPortrait ? '8.5pt' : '9.5pt'} !important;
                      vertical-align: middle !important;
                    }
                    .docs-table th {
                      background-color: #f1f5f9 !important;
                      font-weight: 800 !important;
+                     font-size: ${isPortrait ? '8pt' : '8.5pt'} !important;
+                     height: ${isPortrait ? '22px' : '21px'} !important;
+                     padding: 1px 3px !important;
                      -webkit-print-color-adjust: exact !important;
                      print-color-adjust: exact !important;
+                   }
+                   .docs-table td {
+                     font-size: ${isPortrait ? '7.8pt' : '8.2pt'} !important;
+                     height: ${isPortrait ? '21px' : '19.8px'} !important;
+                     line-height: 1.15 !important;
+                     padding: 0 3px !important;
+                   }
+                   .docs-page-footer {
+                     height: 18px !important;
+                     box-sizing: border-box !important;
                    }
                  }
                `}</style>
@@ -1037,7 +1066,7 @@
           const [printMode, setPrintMode] = useState('list');
            const [docsExportYear, setDocsExportYear] = useState('ALL');
            const [docsExportSort, setDocsExportSort] = useState('byDate');
-           const [docsOrientation, setDocsOrientation] = useState('portrait');
+           const [docsOrientation, setDocsOrientation] = useState('landscape');
           const [alertConfig, setAlertConfig] = useState(null);
           const [confirmConfig, setConfirmConfig] = useState(null);
           const [showScrollTop, setShowScrollTop] = useState(false);
@@ -3112,7 +3141,7 @@
                                 <span>صادر الوثائق - ث. ش. محمد عبدالعزيز الكنعان للبنين</span>
                               </div>
                               <span className="text-[10px] font-black bg-amber-200 text-amber-900 px-2 py-0.5 rounded-md">
-                                {docsOrientation === 'portrait' ? 'ورقة عمودية' : 'ورقة عرضية'}
+                                {docsOrientation === 'landscape' ? 'ورقة عرضية (أفقي)' : 'ورقة عمودية (طولي)'}
                               </span>
                             </div>
 
@@ -3189,8 +3218,8 @@
                                   onChange={(e) => setDocsOrientation(e.target.value)} 
                                   className="w-full p-2 border border-amber-200 rounded-xl font-bold outline-none text-xs bg-white text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 cursor-pointer"
                                 >
-                                  <option value="portrait">عمودي (طولي) - مقلوب</option>
-                                  <option value="landscape">أفقي (عرضي)</option>
+                                  <option value="landscape">أفقي (عرضي) - قياسي ومطابق للسجل</option>
+                                  <option value="portrait">عمودي (طولي)</option>
                                 </select>
                               </div>
                             </div>

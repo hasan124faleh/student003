@@ -421,7 +421,7 @@ const DocsExportPrint = ({
   students, 
   selectedYear, 
   sortBy = 'byDate',
-  orientation = 'portrait'
+  orientation = 'landscape'
 }: { 
   students: Student[]; 
   selectedYear: string; 
@@ -431,6 +431,17 @@ const DocsExportPrint = ({
   const isPortrait = orientation === 'portrait';
 
   useEffect(() => {
+    let styleEl = document.getElementById('docs-page-orientation-style') as HTMLStyleElement | null;
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'docs-page-orientation-style';
+      document.head.appendChild(styleEl);
+    }
+    
+    styleEl.innerHTML = isPortrait 
+      ? `@page { size: A4 portrait; margin: 4mm 4mm; }`
+      : `@page { size: A4 landscape; margin: 4mm 5mm; }`;
+
     if (!isPortrait) {
       document.body.classList.add('print-landscape');
     } else {
@@ -438,6 +449,9 @@ const DocsExportPrint = ({
     }
     return () => {
       document.body.classList.remove('print-landscape');
+      if (styleEl && styleEl.parentNode) {
+        styleEl.parentNode.removeChild(styleEl);
+      }
     };
   }, [isPortrait]);
 
@@ -502,8 +516,8 @@ const DocsExportPrint = ({
     <div className="print-only text-[10pt] dir-rtl font-cairo">
       <style>{`
         @page {
-          size: ${isPortrait ? 'portrait' : 'landscape'};
-          margin: 3mm 4mm;
+          size: ${isPortrait ? 'A4 portrait' : 'A4 landscape'};
+          margin: ${isPortrait ? '4mm 4mm' : '4mm 5mm'};
         }
         @media print {
           html, body {
@@ -524,9 +538,9 @@ const DocsExportPrint = ({
             display: block !important;
           }
           .docs-print-page {
-            width: ${isPortrait ? '202mm' : '289mm'} !important;
-            height: ${isPortrait ? '287mm' : '202mm'} !important;
-            max-height: ${isPortrait ? '287mm' : '202mm'} !important;
+            width: ${isPortrait ? '202mm' : '287mm'} !important;
+            height: ${isPortrait ? '287mm' : '201mm'} !important;
+            max-height: ${isPortrait ? '287mm' : '201mm'} !important;
             box-sizing: border-box !important;
             page-break-after: always !important;
             break-after: page !important;
@@ -721,7 +735,7 @@ export default function App() {
   const [printMode, setPrintMode] = useState<'list' | 'single' | 'selected' | 'docsExport'>('list');
   const [docsExportYear, setDocsExportYear] = useState<string>('ALL');
   const [docsExportSort, setDocsExportSort] = useState<'byDate' | 'alphabetical' | 'byGradeAlpha'>('byDate');
-  const [docsOrientation, setDocsOrientation] = useState<'portrait' | 'landscape'>('portrait');
+  const [docsOrientation, setDocsOrientation] = useState<'portrait' | 'landscape'>('landscape');
   const [alertConfig, setAlertConfig] = useState<{ message: string; type: 'error' | 'success' | 'warning' } | null>(null);
   const [confirmConfig, setConfirmConfig] = useState<{ title: string; message: string; onConfirm: () => void; isDestructive?: boolean } | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -2827,7 +2841,7 @@ export default function App() {
                         <span>صادر الوثائق - ث. ش. محمد عبدالعزيز الكنعان للبنين</span>
                       </div>
                       <span className="text-[10px] font-black bg-amber-200 text-amber-900 px-2 py-0.5 rounded-md">
-                        {docsOrientation === 'portrait' ? 'ورقة عمودية' : 'ورقة عرضية'}
+                        {docsOrientation === 'landscape' ? 'ورقة عرضية (أفقي)' : 'ورقة عمودية (طولي)'}
                       </span>
                     </div>
 
@@ -2904,8 +2918,8 @@ export default function App() {
                           onChange={(e) => setDocsOrientation(e.target.value as 'portrait' | 'landscape')} 
                           className="w-full p-2 border border-amber-200 rounded-xl font-bold outline-none text-xs bg-white text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 cursor-pointer"
                         >
-                          <option value="portrait">عمودي (طولي) - مقلوب</option>
-                          <option value="landscape">أفقي (عرضي)</option>
+                          <option value="landscape">أفقي (عرضي) - قياسي ومطابق للسجل</option>
+                          <option value="portrait">عمودي (طولي)</option>
                         </select>
                       </div>
                     </div>
