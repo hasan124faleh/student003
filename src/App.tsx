@@ -416,8 +416,20 @@ const PrintView = ({ students, title, selectedFields = ['name', 'pageNumber', 'r
   );
 };
 
-// Outgoing Documents Log Print View (طباعة صادر الوثائق - ورقة عرضية)
-const DocsExportPrint = ({ students, selectedYear }: { students: Student[]; selectedYear: string }) => {
+// Outgoing Documents Log Print View (طباعة صادر الوثائق المدرسية - ث. ش. محمد عبدالعزيز الكنعان للبنين)
+const DocsExportPrint = ({ 
+  students, 
+  selectedYear, 
+  sortBy = 'byDate',
+  orientation = 'portrait'
+}: { 
+  students: Student[]; 
+  selectedYear: string; 
+  sortBy?: 'byDate' | 'alphabetical' | 'byGradeAlpha';
+  orientation?: 'portrait' | 'landscape';
+}) => {
+  const isPortrait = orientation === 'portrait';
+
   const transferredStudents = useMemo(() => {
     let list = students.filter(s => !s.isDeleted && (s.status === 'transferred' || !!s.docDestination || !!s.docDate));
     if (selectedYear !== 'ALL') {
@@ -427,14 +439,41 @@ const DocsExportPrint = ({ students, selectedYear }: { students: Student[]; sele
         return yearFromDoc === selectedYear || (!yearFromDoc && yearFromCreated === selectedYear);
       });
     }
-    return list.sort((a, b) => {
-      const dateA = a.docDate || new Date(a.createdAt).toISOString().split('T')[0];
-      const dateB = b.docDate || new Date(b.createdAt).toISOString().split('T')[0];
-      return dateA.localeCompare(dateB);
-    });
-  }, [students, selectedYear]);
 
-  const ROWS_PER_PAGE = 18;
+    const gradeOrder: Record<string, number> = {
+      'الأول متوسط': 1,
+      'الثاني متوسط': 2,
+      'الثالث متوسط': 3,
+      'الرابع علمي': 4,
+      'الخامس علمي': 5,
+      'السادس علمي': 6,
+      'الرابع أدبي': 7,
+      'الخامس أدبي': 8,
+      'السادس أدبي': 9,
+    };
+
+    return list.sort((a, b) => {
+      if (sortBy === 'byDate') {
+        const dateA = a.docDate || new Date(a.createdAt).toISOString().split('T')[0];
+        const dateB = b.docDate || new Date(b.createdAt).toISOString().split('T')[0];
+        const comp = dateA.localeCompare(dateB);
+        if (comp !== 0) return comp;
+        return cleanName(a.firstName).localeCompare(cleanName(b.firstName), 'ar');
+      } else if (sortBy === 'alphabetical') {
+        return cleanName(a.firstName).localeCompare(cleanName(b.firstName), 'ar');
+      } else if (sortBy === 'byGradeAlpha') {
+        const orderA = gradeOrder[a.transferGrade || ''] || 99;
+        const orderB = gradeOrder[b.transferGrade || ''] || 99;
+        if (orderA !== orderB) return orderA - orderB;
+        const compGrade = (a.transferGrade || '').localeCompare(b.transferGrade || '', 'ar');
+        if (compGrade !== 0) return compGrade;
+        return cleanName(a.firstName).localeCompare(cleanName(b.firstName), 'ar');
+      }
+      return 0;
+    });
+  }, [students, selectedYear, sortBy]);
+
+  const ROWS_PER_PAGE = isPortrait ? 26 : 18;
   const totalItems = transferredStudents.length;
   const totalPages = Math.ceil(totalItems / ROWS_PER_PAGE) || 1;
   const printDate = new Date().toLocaleDateString('ar-EG');
@@ -452,13 +491,13 @@ const DocsExportPrint = ({ students, selectedYear }: { students: Student[]; sele
       <style>{`
         @media print {
           @page {
-            size: A4 landscape !important;
-            margin: 6mm 8mm !important;
+            size: ${isPortrait ? 'A4 portrait' : 'A4 landscape'} !important;
+            margin: ${isPortrait ? '4mm 5mm' : '6mm 8mm'} !important;
           }
           html, body {
-            width: 297mm !important;
-            max-width: 297mm !important;
-            min-width: 297mm !important;
+            width: ${isPortrait ? '210mm' : '297mm'} !important;
+            max-width: ${isPortrait ? '210mm' : '297mm'} !important;
+            min-width: ${isPortrait ? '210mm' : '297mm'} !important;
             margin: 0 !important;
             padding: 0 !important;
             height: auto !important;
@@ -472,15 +511,15 @@ const DocsExportPrint = ({ students, selectedYear }: { students: Student[]; sele
             display: block !important;
           }
           .docs-print-page {
-            width: 281mm !important;
-            min-height: 196mm !important;
+            width: ${isPortrait ? '200mm' : '281mm'} !important;
+            min-height: ${isPortrait ? '287mm' : '196mm'} !important;
             box-sizing: border-box !important;
             page-break-after: always !important;
             break-after: page !important;
             display: flex !important;
             flex-direction: column !important;
             justify-content: space-between !important;
-            padding: 5mm 6mm !important;
+            padding: ${isPortrait ? '3mm 4mm' : '5mm 6mm'} !important;
             background: white !important;
             overflow: hidden !important;
           }
@@ -495,9 +534,9 @@ const DocsExportPrint = ({ students, selectedYear }: { students: Student[]; sele
           }
           .docs-table th, .docs-table td {
             border: 1.5px solid #0f172a !important;
-            padding: 4px 6px !important;
+            padding: ${isPortrait ? '3px 4px' : '4px 6px'} !important;
             color: #0f172a !important;
-            font-size: 9.5pt !important;
+            font-size: ${isPortrait ? '8.5pt' : '9.5pt'} !important;
             vertical-align: middle !important;
           }
           .docs-table th {
@@ -513,26 +552,37 @@ const DocsExportPrint = ({ students, selectedYear }: { students: Student[]; sele
         <div key={pageIdx} className="docs-print-page">
           <div>
             {/* Official Header */}
-            <div className="flex justify-between items-center border-b-2 border-slate-900 pb-2 mb-3">
-              <div className="text-right text-[9pt] font-bold leading-relaxed text-slate-800 w-64">
+            <div className="flex justify-between items-center border-b-2 border-slate-900 pb-2 mb-2">
+              <div className="text-right text-[8.5pt] font-bold leading-tight text-slate-800 w-64">
                 <div>جمهورية العراق</div>
                 <div>وزارة التربية</div>
-                <div>المديرية العامة للتربية</div>
+                <div>المديرية العامة لتربية البصرة</div>
+                <div>قسم تربية أبي الخصيب</div>
+                <div className="font-extrabold text-slate-900">ث. ش. محمد عبدالعزيز الكنعان للبنين</div>
               </div>
 
-              <div className="text-center flex-1">
+              <div className="text-center flex-1 px-2">
                 <div className="text-xl font-black text-slate-900 tracking-wide font-cairo">
-                  سجل صادر الوثائق المدرسية (الطلبة المنقولين)
+                  سجل صادر الوثائق المدرسية
                 </div>
-                <div className="text-xs font-bold text-slate-700 mt-1 bg-slate-100 inline-block px-4 py-0.5 rounded-full border border-slate-300">
-                  {selectedYear === 'ALL' ? 'جميع السنوات الدراسية' : `للسنة الدراسية: ${selectedYear}`}
+                <div className="text-sm font-bold text-slate-800 mt-0.5">
+                  ث. ش. محمد عبدالعزيز الكنعان للبنين
+                </div>
+                <div className="flex items-center justify-center gap-2 mt-1">
+                  <span className="text-[9pt] font-bold text-slate-700 bg-slate-100 inline-block px-3 py-0.5 rounded-full border border-slate-300">
+                    {selectedYear === 'ALL' ? 'جميع السنوات الدراسية' : `للسنة الدراسية: ${selectedYear}`}
+                  </span>
+                  <span className="text-[8pt] font-bold text-slate-600 bg-amber-50 text-amber-900 border border-amber-200 px-2.5 py-0.5 rounded-full">
+                    {sortBy === 'byDate' ? 'الترتيب: حسب تاريخ الوثيقة' : sortBy === 'alphabetical' ? 'الترتيب: حسب الأبجدية' : 'الترتيب: أبجدياً حسب الصف'}
+                  </span>
                 </div>
               </div>
 
-              <div className="text-left text-[9pt] font-bold leading-relaxed text-slate-800 w-64">
+              <div className="text-left text-[8.5pt] font-bold leading-tight text-slate-800 w-64">
                 <div>تاريخ الطباعة: {printDate}</div>
                 <div>الصفحة: {pageIdx + 1} من {totalPages}</div>
                 <div>إجمالي الوثائق: {totalItems}</div>
+                <div>التخطيط: {isPortrait ? 'عمودي (طولي)' : 'أفقي (عرضي)'}</div>
               </div>
             </div>
 
@@ -543,13 +593,13 @@ const DocsExportPrint = ({ students, selectedYear }: { students: Student[]; sele
             <table className="docs-table w-full">
               <thead>
                 <tr className="bg-slate-100 text-center">
-                  <th style={{ width: '40px' }} className="text-center font-bold">ت</th>
-                  <th style={{ width: '105px' }} className="text-center font-bold">تاريخ الوثيقة</th>
-                  <th style={{ width: '230px' }} className="text-right font-bold pr-2">اسم الطالب الرباعي</th>
-                  <th style={{ width: '190px' }} className="text-right font-bold pr-2">الجهة الصادر إليها</th>
-                  <th style={{ width: '140px' }} className="text-center font-bold">الغرض من الوثيقة</th>
-                  <th style={{ width: '135px' }} className="text-center font-bold">الصف الذي انتقل فيه</th>
-                  <th style={{ width: '120px' }} className="text-center font-bold">الملاحظات</th>
+                  <th style={{ width: isPortrait ? '30px' : '40px' }} className="text-center font-bold">ت</th>
+                  <th style={{ width: isPortrait ? '82px' : '105px' }} className="text-center font-bold">تاريخ الوثيقة</th>
+                  <th style={{ width: isPortrait ? '175px' : '230px' }} className="text-right font-bold pr-2">اسم الطالب الرباعي</th>
+                  <th style={{ width: isPortrait ? '145px' : '190px' }} className="text-right font-bold pr-2">الجهة الصادر إليها</th>
+                  <th style={{ width: isPortrait ? '95px' : '140px' }} className="text-center font-bold">الغرض من الوثيقة</th>
+                  <th style={{ width: isPortrait ? '95px' : '135px' }} className="text-center font-bold">الصف الذي انتقل فيه</th>
+                  <th style={{ width: isPortrait ? '80px' : '120px' }} className="text-center font-bold">الملاحظات</th>
                 </tr>
               </thead>
               <tbody>
@@ -557,7 +607,7 @@ const DocsExportPrint = ({ students, selectedYear }: { students: Student[]; sele
                   const s = pageRows[rIdx];
                   const serial = pageIdx * ROWS_PER_PAGE + rIdx + 1;
                   return (
-                    <tr key={rIdx} style={{ height: '32px' }}>
+                    <tr key={rIdx} style={{ height: isPortrait ? '28px' : '32px' }}>
                       <td className="text-center font-bold font-mono">{s ? serial : ''}</td>
                       <td className="text-center font-mono font-bold">{s ? (s.docDate || '—') : ''}</td>
                       <td className="text-right font-bold whitespace-nowrap overflow-hidden pr-2">
@@ -575,18 +625,18 @@ const DocsExportPrint = ({ students, selectedYear }: { students: Student[]; sele
           </div>
 
           {/* Official Signatures Footer */}
-          <div className="pt-2 border-t-2 border-slate-900 mt-2 flex justify-between items-end px-12 text-center text-xs font-bold text-slate-900">
+          <div className="pt-2 border-t-2 border-slate-900 mt-2 flex justify-between items-end px-8 text-center text-xs font-bold text-slate-900">
             <div>
-              <div className="mb-8">منظم السجل</div>
-              <div className="border-t border-slate-800 w-36 pt-1">التوقيع والاسم</div>
+              <div className="mb-7">منظم السجل</div>
+              <div className="border-t border-slate-800 w-32 pt-1">التوقيع والاسم</div>
             </div>
             <div>
-              <div className="mb-8">مدقق السجل</div>
-              <div className="border-t border-slate-800 w-36 pt-1">التوقيع والاسم</div>
+              <div className="mb-7">مدقق السجل</div>
+              <div className="border-t border-slate-800 w-32 pt-1">التوقيع والاسم</div>
             </div>
             <div>
-              <div className="mb-8">ختم وتوقيع مدير المدرسة</div>
-              <div className="border-t border-slate-800 w-44 pt-1">المدير</div>
+              <div className="mb-7">ختم وتوقيع مدير المدرسة</div>
+              <div className="border-t border-slate-800 w-44 pt-1">مدير المدرسة</div>
             </div>
           </div>
         </div>
@@ -654,6 +704,8 @@ export default function App() {
   const [importProgress, setImportProgress] = useState(0);
   const [printMode, setPrintMode] = useState<'list' | 'single' | 'selected' | 'docsExport'>('list');
   const [docsExportYear, setDocsExportYear] = useState<string>('ALL');
+  const [docsExportSort, setDocsExportSort] = useState<'byDate' | 'alphabetical' | 'byGradeAlpha'>('byDate');
+  const [docsOrientation, setDocsOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [alertConfig, setAlertConfig] = useState<{ message: string; type: 'error' | 'success' | 'warning' } | null>(null);
   const [confirmConfig, setConfirmConfig] = useState<{ title: string; message: string; onConfirm: () => void; isDestructive?: boolean } | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -2744,36 +2796,95 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* القسم 2: طباعة صادر الوثائق (الطلبة المنقولين) - ورقة عرضية */}
+                  {/* القسم 2: طباعة صادر الوثائق - ث. ش. محمد عبدالعزيز الكنعان للبنين */}
                   <div className="bg-amber-50/80 border-2 border-amber-300 rounded-2xl p-3.5 space-y-3">
                     <div className="flex items-center justify-between border-b border-amber-200 pb-1.5">
                       <div className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
                         <FileText size={16} className="text-amber-700" />
-                        <span>طباعة صادر الوثائق (الطلبة المنقولين)</span>
+                        <span>صادر الوثائق - ث. ش. محمد عبدالعزيز الكنعان للبنين</span>
                       </div>
                       <span className="text-[10px] font-black bg-amber-200 text-amber-900 px-2 py-0.5 rounded-md">
-                        ورقة عرضية
+                        {docsOrientation === 'portrait' ? 'ورقة عمودية' : 'ورقة عرضية'}
                       </span>
                     </div>
 
-                    <p className="text-[11px] text-amber-900/80 leading-relaxed font-medium">
-                      كشف رسمي يتضمن: (ت، تاريخ الوثيقة، اسم الطالب الرباعي، الجهة الصادر إليها، الغرض من الوثيقة، الصف الذي انتقل فيه، الملاحظات)
+                    <p className="text-[11px] text-amber-900/80 leading-relaxed font-semibold">
+                      المديرية العامة لتربية البصرة • قسم تربية أبي الخصيب
                     </p>
 
+                    {/* خيارات ترتيب السجلات */}
                     <div>
                       <label className="block text-[11px] font-bold text-amber-950 mb-1">
-                        تحديد السنة الدراسية:
+                        خيارات الترتيب:
                       </label>
-                      <select 
-                        value={docsExportYear} 
-                        onChange={(e) => setDocsExportYear(e.target.value)} 
-                        className="w-full p-2 border border-amber-200 rounded-xl font-bold outline-none text-xs bg-white text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 cursor-pointer"
-                      >
-                        <option value="ALL">جميع السنوات</option>
-                        {docYears.map(y => (
-                          <option key={y} value={y}>سنة {y}</option>
-                        ))}
-                      </select>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setDocsExportSort('byDate')}
+                          className={`py-1.5 px-1 rounded-xl text-[11px] font-bold border transition-all text-center ${
+                            docsExportSort === 'byDate'
+                              ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                              : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100/60'
+                          }`}
+                        >
+                          تاريخ الوثيقة
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDocsExportSort('alphabetical')}
+                          className={`py-1.5 px-1 rounded-xl text-[11px] font-bold border transition-all text-center ${
+                            docsExportSort === 'alphabetical'
+                              ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                              : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100/60'
+                          }`}
+                        >
+                          الأبجدية
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDocsExportSort('byGradeAlpha')}
+                          className={`py-1.5 px-1 rounded-xl text-[11px] font-bold border transition-all text-center ${
+                            docsExportSort === 'byGradeAlpha'
+                              ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                              : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100/60'
+                          }`}
+                        >
+                          أبجدياً حسب الصف
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* تحديد السنة وتوجيه الورقة */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[11px] font-bold text-amber-950 mb-1">
+                          تحديد السنة:
+                        </label>
+                        <select 
+                          value={docsExportYear} 
+                          onChange={(e) => setDocsExportYear(e.target.value)} 
+                          className="w-full p-2 border border-amber-200 rounded-xl font-bold outline-none text-xs bg-white text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                        >
+                          <option value="ALL">جميع السنوات</option>
+                          {docYears.map(y => (
+                            <option key={y} value={y}>سنة {y}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-amber-950 mb-1">
+                          توجيه الصفحة:
+                        </label>
+                        <select 
+                          value={docsOrientation} 
+                          onChange={(e) => setDocsOrientation(e.target.value as 'portrait' | 'landscape')} 
+                          className="w-full p-2 border border-amber-200 rounded-xl font-bold outline-none text-xs bg-white text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                        >
+                          <option value="portrait">عمودي (طولي) - مقلوب</option>
+                          <option value="landscape">أفقي (عرضي)</option>
+                        </select>
+                      </div>
                     </div>
 
                     <div className="flex items-center justify-between text-[11px] font-bold text-amber-900 bg-white/80 px-3 py-1.5 rounded-xl border border-amber-200/60">
@@ -2971,8 +3082,14 @@ export default function App() {
       
       {printMode === 'list' && <PrintView students={filtered} title={selectedRegFilter ? `كشف الطلاب - قيد رقم ${selectedRegFilter}` : "كشف القيد العام"} selectedFields={printTemplateFields} />}
       {printMode === 'single' && students.find(s=>s.id===selectedId) && <SingleStudentPrint student={students.find(s=>s.id===selectedId)!} />}
-      {printMode === 'selected' && <PrintView students={students.filter(s => selectedStudents.includes(s.id) && !s.isDeleted)} title="الطلاب المحددين" selectedFields={printTemplateFields} />}
-      {printMode === 'docsExport' && <DocsExportPrint students={students} selectedYear={docsExportYear} />}
+      {printMode === 'docsExport' && (
+        <DocsExportPrint 
+          students={students} 
+          selectedYear={docsExportYear} 
+          sortBy={docsExportSort} 
+          orientation={docsOrientation} 
+        />
+      )}
     </>
   );
 }
