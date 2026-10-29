@@ -538,9 +538,9 @@ const DocsExportPrint = ({
             display: block !important;
           }
           .docs-print-page {
-            width: ${isPortrait ? '202mm' : '287mm'} !important;
-            height: ${isPortrait ? '287mm' : '201mm'} !important;
-            max-height: ${isPortrait ? '287mm' : '201mm'} !important;
+            width: ${isPortrait ? '202mm' : '289mm'} !important;
+            height: ${isPortrait ? '287mm' : '204mm'} !important;
+            max-height: ${isPortrait ? '287mm' : '204mm'} !important;
             box-sizing: border-box !important;
             page-break-after: always !important;
             break-after: page !important;
@@ -571,14 +571,14 @@ const DocsExportPrint = ({
             background-color: #f1f5f9 !important;
             font-weight: 800 !important;
             font-size: ${isPortrait ? '8pt' : '8.5pt'} !important;
-            height: ${isPortrait ? '22px' : '21px'} !important;
+            height: ${isPortrait ? '23px' : '21.5px'} !important;
             padding: 1px 3px !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
           .docs-table td {
             font-size: ${isPortrait ? '7.8pt' : '8.2pt'} !important;
-            height: ${isPortrait ? '21px' : '19.8px'} !important;
+            height: ${isPortrait ? '8.2mm' : '5.75mm'} !important;
             line-height: 1.15 !important;
             padding: 0 3px !important;
           }
@@ -591,9 +591,9 @@ const DocsExportPrint = ({
       
       {pages.map((pageRows, pageIdx) => (
         <div key={pageIdx} className="docs-print-page">
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col justify-start">
             {/* Official Header */}
-            <div className="flex justify-between items-center border-b-2 border-slate-900 pb-1.5 mb-1.5">
+            <div className="flex justify-between items-center border-b-2 border-slate-900 pb-1 mb-1">
               {/* Right: Only Directorate and Department */}
               <div className="text-right text-[8.5pt] font-bold leading-tight text-slate-800 w-56">
                 <div>جمهورية العراق</div>
@@ -644,15 +644,62 @@ const DocsExportPrint = ({
                 {Array.from({ length: ROWS_PER_PAGE }).map((_, rIdx) => {
                   const s = pageRows[rIdx];
                   const serial = pageIdx * ROWS_PER_PAGE + rIdx + 1;
+                  const studentFullName = s ? `${cleanName(s.firstName)} ${s.lastName || ''}`.trim() : '';
+                  const destination = s?.docDestination || '';
+                  const purpose = s?.docPurpose || '';
+
+                  // Dynamic font scaling for long names, destinations and purposes
+                  const getNameStyle = (name: string) => {
+                    const len = name.length;
+                    const base = isPortrait ? 7.8 : 8.2;
+                    if (len <= 22) return { fontSize: `${base}pt`, letterSpacing: 'normal' };
+                    if (len <= 28) return { fontSize: `${(base * 0.88).toFixed(2)}pt`, letterSpacing: '-0.2px' };
+                    if (len <= 35) return { fontSize: `${(base * 0.77).toFixed(2)}pt`, letterSpacing: '-0.35px' };
+                    return { fontSize: `${(base * 0.67).toFixed(2)}pt`, letterSpacing: '-0.5px' };
+                  };
+
+                  const getDestStyle = (dest: string) => {
+                    const len = dest.length;
+                    const base = isPortrait ? 7.8 : 8.2;
+                    if (len <= 20) return { fontSize: `${base}pt`, letterSpacing: 'normal' };
+                    if (len <= 28) return { fontSize: `${(base * 0.88).toFixed(2)}pt`, letterSpacing: '-0.2px' };
+                    if (len <= 36) return { fontSize: `${(base * 0.77).toFixed(2)}pt`, letterSpacing: '-0.35px' };
+                    return { fontSize: `${(base * 0.67).toFixed(2)}pt`, letterSpacing: '-0.5px' };
+                  };
+
+                  const getPurposeStyle = (purp: string) => {
+                    const len = purp.length;
+                    const base = isPortrait ? 7.6 : 8.0;
+                    if (len <= 16) return { fontSize: `${base}pt`, letterSpacing: 'normal' };
+                    if (len <= 24) return { fontSize: `${(base * 0.86).toFixed(2)}pt`, letterSpacing: '-0.2px' };
+                    return { fontSize: `${(base * 0.74).toFixed(2)}pt`, letterSpacing: '-0.3px' };
+                  };
+
                   return (
-                    <tr key={rIdx} style={{ height: isPortrait ? '21px' : '19.8px' }}>
+                    <tr key={rIdx} style={{ height: isPortrait ? '8.2mm' : '5.75mm' }}>
                       <td className="text-center font-bold font-mono">{s ? serial : ''}</td>
                       <td className="text-center font-mono font-bold">{s ? (s.docDate || '—') : ''}</td>
-                      <td className="text-right font-bold whitespace-nowrap overflow-hidden pr-2">
-                        {s ? `${cleanName(s.firstName)} ${s.lastName || ''}`.trim() : ''}
+                      <td 
+                        className="text-right font-bold whitespace-nowrap overflow-hidden pr-2"
+                        style={getNameStyle(studentFullName)}
+                        title={studentFullName}
+                      >
+                        {studentFullName}
                       </td>
-                      <td className="text-right font-medium whitespace-nowrap overflow-hidden pr-2">{s ? (s.docDestination || '—') : ''}</td>
-                      <td className="text-center font-medium">{s ? (s.docPurpose || '—') : ''}</td>
+                      <td 
+                        className="text-right font-medium whitespace-nowrap overflow-hidden pr-2"
+                        style={getDestStyle(destination)}
+                        title={destination}
+                      >
+                        {s ? (destination || '—') : ''}
+                      </td>
+                      <td 
+                        className="text-center font-medium whitespace-nowrap overflow-hidden px-1"
+                        style={getPurposeStyle(purpose)}
+                        title={purpose}
+                      >
+                        {s ? (purpose || '—') : ''}
+                      </td>
                       <td className="text-center font-bold">{s ? (s.transferGrade || '—') : ''}</td>
                       <td className="text-center"></td>
                     </tr>
