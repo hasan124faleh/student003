@@ -947,7 +947,7 @@
                            const s = pageRows[rIdx];
                            const serial = pageIdx * ROWS_PER_PAGE + rIdx + 1;
                            return (
-                             <tr key={rIdx} style={{ height: isPortrait ? '27px' : '29px' }}>
+                             <tr key={rIdx} style={{ height: isPortrait ? '21px' : '19.8px' }}>
                                <td className="text-center font-bold font-mono">{s ? serial : ''}</td>
                                <td className="text-center font-mono font-bold">{s ? (s.docDate || '—') : ''}</td>
                                <td className="text-right font-bold whitespace-nowrap overflow-hidden pr-2">
@@ -964,10 +964,10 @@
                      </table>
                    </div>
 
-                   {/* Minimal Page Sequence Footer (Signatures deleted for max space!) */}
-                   <div className="pt-1.5 border-t border-slate-400 mt-1 flex justify-between items-center px-4 text-xs font-bold text-slate-600">
-                     <div className="text-[9pt] font-bold text-slate-700">سجل صادر الوثائق - ث. ش. محمد عبدالعزيز الكنعان للبنين</div>
-                     <div className="text-[9.5pt] font-black text-slate-900 bg-slate-100 px-3 py-0.5 rounded-md border border-slate-300 font-mono">
+                   {/* Page Sequence Footer anchored on the SAME page */}
+                   <div className="docs-page-footer pt-1 border-t-2 border-slate-900 mt-0.5 flex justify-between items-center px-4 text-xs font-bold text-slate-700">
+                     <div className="text-[8.5pt] font-bold text-slate-800">سجل صادر الوثائق - ث. ش. محمد عبدالعزيز الكنعان للبنين</div>
+                     <div className="text-[9pt] font-black text-slate-900 bg-slate-100 px-3 py-0.5 rounded border border-slate-400 font-mono">
                        صفحة {pageIdx + 1} من {totalPages}
                      </div>
                    </div>
@@ -1065,6 +1065,7 @@
           const [showPrintSelectedModal, setShowPrintSelectedModal] = useState(false);
           const [editFormData, setEditFormData] = useState(null);
           const [formStatus, setFormStatus] = useState('active');
+          const [formTransferGrade, setFormTransferGrade] = useState('');
           const [docPurposeType, setDocPurposeType] = useState('إكمال الدراسة');
           const [customDocPurpose, setCustomDocPurpose] = useState('');
           const [customRegs, setCustomRegs] = useState(() => {
@@ -1341,6 +1342,8 @@
             if (view === 'edit' && selectedId) {
               const student = students.find(s => s.id === selectedId);
               if (student) {
+                const initialGrade = (student.transferGrade || student.grade || '').trim();
+                setFormTransferGrade(initialGrade);
                 setEditFormData({
                   firstName: cleanName(student.firstName),
                   lastName: student.lastName || '',
@@ -1350,7 +1353,7 @@
                   docDate: student.docDate || '',
                   docDestination: student.docDestination || '',
                   docPurpose: student.docPurpose || '',
-                  transferGrade: student.transferGrade || '',
+                  transferGrade: initialGrade,
                   notes: student.notes || '',
                   createdAt: formatDateForInput(student.createdAt)
                 });
@@ -1366,6 +1369,7 @@
               }
             } else if (view === 'add') {
               setFormStatus('active');
+              setFormTransferGrade('');
               setDocPurposeType('إكمال الدراسة');
               setCustomDocPurpose('');
             }
@@ -2305,7 +2309,7 @@
 
                 {/* Add/Edit Modal (SWAPPED: Page input before Reg input) */}
                 {(view === 'add' || view === 'edit') && (
-                    <Modal onClose={() => { setView('list'); setSimilarStudents([]); setEditFormData(null); setSavedStudentName(null); }}>
+                    <Modal onClose={() => { setView('list'); setSimilarStudents([]); setEditFormData(null); setSavedStudentName(null); setFormTransferGrade(''); }}>
                       <div className="bg-white rounded-2xl shadow-2xl p-5 space-y-4 max-h-[80vh] overflow-y-auto">
                         <h2 className="text-lg font-bold">{view === 'add' ? 'إضافة طالب جديد' : 'تعديل بيانات الطالب'}</h2>
                         
@@ -2366,7 +2370,7 @@
                                 docDate: st === 'transferred' ? String(form.get('docDate') || '').trim() : '',
                                 docDestination: st === 'transferred' ? String(form.get('docDestination') || '').trim() : '',
                                 docPurpose: purpose,
-                                transferGrade: st === 'transferred' ? String(form.get('transferGrade') || '').trim() : '',
+                                transferGrade: st === 'transferred' ? (formTransferGrade || String(form.get('transferGrade') || '')).trim() : '',
                                 isDeleted: false,
                                 createdAt: view === 'edit' ? new Date(form.get('createdAt')).getTime() : Date.now()
                             };
@@ -2558,7 +2562,8 @@
                                    <label className="block text-[11px] font-bold text-amber-900 mb-1">الصف الذي انتقل فيه</label>
                                    <select 
                                      name="transferGrade" 
-                                     defaultValue={editFormData?.transferGrade || ''} 
+                                     value={formTransferGrade} 
+                                     onChange={(e) => setFormTransferGrade(e.target.value)} 
                                      className="w-full p-2.5 rounded-xl bg-white border border-amber-200 outline-none font-bold text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 cursor-pointer"
                                    >
                                      <option value="">اختر الصف...</option>
@@ -2577,12 +2582,12 @@
                                        <option value="الخامس أدبي">الخامس أدبي</option>
                                        <option value="السادس أدبي">السادس أدبي</option>
                                      </optgroup>
-                                     {editFormData?.transferGrade && ![
+                                     {formTransferGrade && ![
                                        'الأول متوسط', 'الثاني متوسط', 'الثالث متوسط',
                                        'الرابع علمي', 'الخامس علمي', 'السادس علمي',
                                        'الرابع أدبي', 'الخامس أدبي', 'السادس أدبي'
-                                     ].includes(editFormData.transferGrade) && (
-                                       <option value={editFormData.transferGrade}>{editFormData.transferGrade}</option>
+                                     ].includes(formTransferGrade) && (
+                                       <option value={formTransferGrade}>{formTransferGrade}</option>
                                      )}
                                    </select>
                                  </div>
@@ -3335,7 +3340,34 @@
                             
                             <div className="flex gap-2">
                                 <button 
-                                  onClick={() => { setView('edit'); setSimilarStudents([]); }} 
+                                  onClick={() => { 
+                                    const currentGrade = (s.transferGrade || s.grade || '').trim();
+                                    setFormTransferGrade(currentGrade);
+                                    setFormStatus(s.status || 'active');
+                                    setEditFormData({
+                                      firstName: cleanName(s.firstName),
+                                      lastName: s.lastName || '',
+                                      pageNumber: s.pageNumber,
+                                      regNumber: s.regNumber,
+                                      status: s.status || 'active',
+                                      docDate: s.docDate || '',
+                                      docDestination: s.docDestination || '',
+                                      docPurpose: s.docPurpose || '',
+                                      transferGrade: currentGrade,
+                                      notes: s.notes || '',
+                                      createdAt: formatDateForInput(s.createdAt)
+                                    });
+                                    const p = s.docPurpose || '';
+                                    if (p && p !== 'إكمال الدراسة') {
+                                      setDocPurposeType('أخرى');
+                                      setCustomDocPurpose(p);
+                                    } else {
+                                      setDocPurposeType('إكمال الدراسة');
+                                      setCustomDocPurpose('');
+                                    }
+                                    setView('edit'); 
+                                    setSimilarStudents([]); 
+                                  }} 
                                   className="flex-1 bg-slate-100 py-2.5 rounded-xl font-bold hover:bg-slate-200 text-slate-700 transition-colors text-sm"
                                 >
                                   تعديل البيانات
