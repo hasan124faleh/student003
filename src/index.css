@@ -49,8 +49,7 @@ html, body {
 /* Print Styles */
 @media print {
   @page { 
-      size: A4; 
-      margin: 0 !important; 
+      margin: 0; 
   } 
   
   html, body { 
@@ -60,8 +59,16 @@ html, body {
       color: black !important;
       overflow: visible !important;
       height: auto !important;
-      max-width: none !important;
-      width: 210mm !important;
+  }
+
+  body.print-landscape {
+      width: 297mm !important;
+      max-width: 297mm !important;
+      min-width: 297mm !important;
+  }
+
+  body:not(.print-landscape) {
+      width: 210mm;
   }
   
   .no-print { display: none !important; }

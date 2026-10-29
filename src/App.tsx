@@ -416,7 +416,7 @@ const PrintView = ({ students, title, selectedFields = ['name', 'pageNumber', 'r
   );
 };
 
-// Outgoing Documents Log Print View (طباعة صادر الوثائق المدرسية - ث. ش. محمد عبدالعزيز الكنعان للبنين)
+// Outgoing Documents Log Print View (طباعة صادر الوثائق - ث. ش. محمد عبدالعزيز الكنعان للبنين)
 const DocsExportPrint = ({ 
   students, 
   selectedYear, 
@@ -429,6 +429,17 @@ const DocsExportPrint = ({
   orientation?: 'portrait' | 'landscape';
 }) => {
   const isPortrait = orientation === 'portrait';
+
+  useEffect(() => {
+    if (!isPortrait) {
+      document.body.classList.add('print-landscape');
+    } else {
+      document.body.classList.remove('print-landscape');
+    }
+    return () => {
+      document.body.classList.remove('print-landscape');
+    };
+  }, [isPortrait]);
 
   const transferredStudents = useMemo(() => {
     let list = students.filter(s => !s.isDeleted && (s.status === 'transferred' || !!s.docDestination || !!s.docDate));
@@ -473,7 +484,8 @@ const DocsExportPrint = ({
     });
   }, [students, selectedYear, sortBy]);
 
-  const ROWS_PER_PAGE = isPortrait ? 26 : 18;
+  // Increased rows per page now that signatures footer is deleted to maximize space for names!
+  const ROWS_PER_PAGE = isPortrait ? 30 : 22;
   const totalItems = transferredStudents.length;
   const totalPages = Math.ceil(totalItems / ROWS_PER_PAGE) || 1;
   const printDate = new Date().toLocaleDateString('ar-EG');
@@ -489,11 +501,11 @@ const DocsExportPrint = ({
   return (
     <div className="print-only text-[10pt] dir-rtl font-cairo">
       <style>{`
+        @page {
+          size: ${isPortrait ? 'portrait' : 'landscape'};
+          margin: 4mm 5mm;
+        }
         @media print {
-          @page {
-            size: ${isPortrait ? 'A4 portrait' : 'A4 landscape'} !important;
-            margin: ${isPortrait ? '4mm 5mm' : '6mm 8mm'} !important;
-          }
           html, body {
             width: ${isPortrait ? '210mm' : '297mm'} !important;
             max-width: ${isPortrait ? '210mm' : '297mm'} !important;
@@ -511,15 +523,15 @@ const DocsExportPrint = ({
             display: block !important;
           }
           .docs-print-page {
-            width: ${isPortrait ? '200mm' : '281mm'} !important;
-            min-height: ${isPortrait ? '287mm' : '196mm'} !important;
+            width: ${isPortrait ? '200mm' : '287mm'} !important;
+            min-height: ${isPortrait ? '287mm' : '198mm'} !important;
             box-sizing: border-box !important;
             page-break-after: always !important;
             break-after: page !important;
             display: flex !important;
             flex-direction: column !important;
             justify-content: space-between !important;
-            padding: ${isPortrait ? '3mm 4mm' : '5mm 6mm'} !important;
+            padding: 3mm 4mm !important;
             background: white !important;
             overflow: hidden !important;
           }
@@ -550,27 +562,28 @@ const DocsExportPrint = ({
       
       {pages.map((pageRows, pageIdx) => (
         <div key={pageIdx} className="docs-print-page">
-          <div>
+          <div className="flex-1 flex flex-col">
             {/* Official Header */}
             <div className="flex justify-between items-center border-b-2 border-slate-900 pb-2 mb-2">
-              <div className="text-right text-[8.5pt] font-bold leading-tight text-slate-800 w-64">
+              {/* Right: Only Directorate and Department (No school name on right side) */}
+              <div className="text-right text-[8.5pt] font-bold leading-tight text-slate-800 w-56">
                 <div>جمهورية العراق</div>
                 <div>وزارة التربية</div>
                 <div>المديرية العامة لتربية البصرة</div>
                 <div>قسم تربية أبي الخصيب</div>
-                <div className="font-extrabold text-slate-900">ث. ش. محمد عبدالعزيز الكنعان للبنين</div>
               </div>
 
+              {/* Center: Title + School Name + Years without word الدراسية */}
               <div className="text-center flex-1 px-2">
                 <div className="text-xl font-black text-slate-900 tracking-wide font-cairo">
-                  سجل صادر الوثائق المدرسية
+                  سجل صادر الوثائق
                 </div>
                 <div className="text-sm font-bold text-slate-800 mt-0.5">
                   ث. ش. محمد عبدالعزيز الكنعان للبنين
                 </div>
                 <div className="flex items-center justify-center gap-2 mt-1">
-                  <span className="text-[9pt] font-bold text-slate-700 bg-slate-100 inline-block px-3 py-0.5 rounded-full border border-slate-300">
-                    {selectedYear === 'ALL' ? 'جميع السنوات الدراسية' : `للسنة الدراسية: ${selectedYear}`}
+                  <span className="text-[8.5pt] font-bold text-slate-700 bg-slate-100 inline-block px-3 py-0.5 rounded-full border border-slate-300">
+                    {selectedYear === 'ALL' ? 'جميع السنوات' : `للسنة: ${selectedYear}`}
                   </span>
                   <span className="text-[8pt] font-bold text-slate-600 bg-amber-50 text-amber-900 border border-amber-200 px-2.5 py-0.5 rounded-full">
                     {sortBy === 'byDate' ? 'الترتيب: حسب تاريخ الوثيقة' : sortBy === 'alphabetical' ? 'الترتيب: حسب الأبجدية' : 'الترتيب: أبجدياً حسب الصف'}
@@ -578,28 +591,24 @@ const DocsExportPrint = ({
                 </div>
               </div>
 
-              <div className="text-left text-[8.5pt] font-bold leading-tight text-slate-800 w-64">
+              {/* Left: Date + Total count (No planning text, and page moved to footer) */}
+              <div className="text-left text-[8.5pt] font-bold leading-tight text-slate-800 w-56">
                 <div>تاريخ الطباعة: {printDate}</div>
-                <div>الصفحة: {pageIdx + 1} من {totalPages}</div>
                 <div>إجمالي الوثائق: {totalItems}</div>
-                <div>التخطيط: {isPortrait ? 'عمودي (طولي)' : 'أفقي (عرضي)'}</div>
               </div>
             </div>
 
-            {/* Official Table: 
-                Columns strictly in requested sequence:
-                ت | تاريخ الوثيقة | اسم الطالب الرباعي | الجهة الصادر إليها | الغرض من الوثيقة | الصف الذي انتقل فيه | الملاحظات
-            */}
+            {/* Official Table */}
             <table className="docs-table w-full">
               <thead>
                 <tr className="bg-slate-100 text-center">
-                  <th style={{ width: isPortrait ? '30px' : '40px' }} className="text-center font-bold">ت</th>
-                  <th style={{ width: isPortrait ? '82px' : '105px' }} className="text-center font-bold">تاريخ الوثيقة</th>
-                  <th style={{ width: isPortrait ? '175px' : '230px' }} className="text-right font-bold pr-2">اسم الطالب الرباعي</th>
-                  <th style={{ width: isPortrait ? '145px' : '190px' }} className="text-right font-bold pr-2">الجهة الصادر إليها</th>
+                  <th style={{ width: isPortrait ? '28px' : '35px' }} className="text-center font-bold">ت</th>
+                  <th style={{ width: isPortrait ? '80px' : '95px' }} className="text-center font-bold">تاريخ الوثيقة</th>
+                  <th style={{ width: isPortrait ? '185px' : '245px' }} className="text-right font-bold pr-2">اسم الطالب الرباعي</th>
+                  <th style={{ width: isPortrait ? '145px' : '195px' }} className="text-right font-bold pr-2">الجهة الصادر إليها</th>
                   <th style={{ width: isPortrait ? '95px' : '140px' }} className="text-center font-bold">الغرض من الوثيقة</th>
                   <th style={{ width: isPortrait ? '95px' : '135px' }} className="text-center font-bold">الصف الذي انتقل فيه</th>
-                  <th style={{ width: isPortrait ? '80px' : '120px' }} className="text-center font-bold">الملاحظات</th>
+                  <th style={{ width: isPortrait ? '80px' : '130px' }} className="text-center font-bold">الملاحظات</th>
                 </tr>
               </thead>
               <tbody>
@@ -607,7 +616,7 @@ const DocsExportPrint = ({
                   const s = pageRows[rIdx];
                   const serial = pageIdx * ROWS_PER_PAGE + rIdx + 1;
                   return (
-                    <tr key={rIdx} style={{ height: isPortrait ? '28px' : '32px' }}>
+                    <tr key={rIdx} style={{ height: isPortrait ? '27px' : '29px' }}>
                       <td className="text-center font-bold font-mono">{s ? serial : ''}</td>
                       <td className="text-center font-mono font-bold">{s ? (s.docDate || '—') : ''}</td>
                       <td className="text-right font-bold whitespace-nowrap overflow-hidden pr-2">
@@ -624,19 +633,11 @@ const DocsExportPrint = ({
             </table>
           </div>
 
-          {/* Official Signatures Footer */}
-          <div className="pt-2 border-t-2 border-slate-900 mt-2 flex justify-between items-end px-8 text-center text-xs font-bold text-slate-900">
-            <div>
-              <div className="mb-7">منظم السجل</div>
-              <div className="border-t border-slate-800 w-32 pt-1">التوقيع والاسم</div>
-            </div>
-            <div>
-              <div className="mb-7">مدقق السجل</div>
-              <div className="border-t border-slate-800 w-32 pt-1">التوقيع والاسم</div>
-            </div>
-            <div>
-              <div className="mb-7">ختم وتوقيع مدير المدرسة</div>
-              <div className="border-t border-slate-800 w-44 pt-1">مدير المدرسة</div>
+          {/* Minimal Page Sequence Footer (Signatures deleted for max space!) */}
+          <div className="pt-1.5 border-t border-slate-400 mt-1 flex justify-between items-center px-4 text-xs font-bold text-slate-600">
+            <div className="text-[9pt] font-bold text-slate-700">سجل صادر الوثائق - ث. ش. محمد عبدالعزيز الكنعان للبنين</div>
+            <div className="text-[9.5pt] font-black text-slate-900 bg-slate-100 px-3 py-0.5 rounded-md border border-slate-300 font-mono">
+              صفحة {pageIdx + 1} من {totalPages}
             </div>
           </div>
         </div>
