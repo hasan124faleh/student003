@@ -439,8 +439,8 @@ const DocsExportPrint = ({
     }
     
     styleEl.innerHTML = isPortrait 
-      ? `@page { size: A4 portrait; margin: 4mm 4mm; }`
-      : `@page { size: A4 landscape; margin: 4mm 5mm; }`;
+      ? `@page { size: portrait; margin: 4mm 4mm; }`
+      : `@page { size: landscape; margin: 4mm 5mm; }`;
 
     if (!isPortrait) {
       document.body.classList.add('print-landscape');
@@ -516,7 +516,7 @@ const DocsExportPrint = ({
     <div className="print-only text-[10pt] dir-rtl font-cairo">
       <style>{`
         @page {
-          size: ${isPortrait ? 'A4 portrait' : 'A4 landscape'};
+          size: ${isPortrait ? 'portrait' : 'landscape'};
           margin: ${isPortrait ? '4mm 4mm' : '4mm 5mm'};
         }
         @media print {
@@ -566,6 +566,11 @@ const DocsExportPrint = ({
             border: 1px solid #0f172a !important;
             color: #0f172a !important;
             vertical-align: middle !important;
+            white-space: nowrap !important;
+            word-wrap: normal !important;
+            overflow-wrap: normal !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
           }
           .docs-table th {
             background-color: #f1f5f9 !important;
@@ -593,9 +598,9 @@ const DocsExportPrint = ({
         <div key={pageIdx} className="docs-print-page">
           <div className="flex-1 flex flex-col justify-start">
             {/* Official Header */}
-            <div className="flex justify-between items-center border-b-2 border-slate-900 pb-1 mb-1">
+            <div className="flex justify-between items-center border-b-2 border-slate-900 pb-1 mb-1 w-full">
               {/* Right: Only Directorate and Department */}
-              <div className="text-right text-[8.5pt] font-bold leading-tight text-slate-800 w-56">
+              <div className="text-right text-[8.5pt] font-bold leading-tight text-slate-800 w-[27%] flex-shrink-0">
                 <div>جمهورية العراق</div>
                 <div>وزارة التربية</div>
                 <div>المديرية العامة لتربية البصرة</div>
@@ -603,7 +608,7 @@ const DocsExportPrint = ({
               </div>
 
               {/* Center: Title + School Name + Years without word الدراسية */}
-              <div className="text-center flex-1 px-2">
+              <div className="text-center flex-1 px-2 min-w-0">
                 <div className="text-xl font-black text-slate-900 tracking-wide font-cairo">
                   سجل صادر الوثائق
                 </div>
@@ -611,17 +616,17 @@ const DocsExportPrint = ({
                   ث. ش. محمد عبدالعزيز الكنعان للبنين
                 </div>
                 <div className="flex items-center justify-center gap-2 mt-1">
-                  <span className="text-[8.5pt] font-bold text-slate-700 bg-slate-100 inline-block px-3 py-0.5 rounded-full border border-slate-300">
+                  <span className="text-[8.5pt] font-bold text-slate-700 bg-slate-100 inline-block px-3 py-0.5 rounded-full border border-slate-300 whitespace-nowrap">
                     {selectedYear === 'ALL' ? 'جميع السنوات' : `للسنة: ${selectedYear}`}
                   </span>
-                  <span className="text-[8pt] font-bold text-slate-600 bg-amber-50 text-amber-900 border border-amber-200 px-2.5 py-0.5 rounded-full">
+                  <span className="text-[8pt] font-bold text-slate-600 bg-amber-50 text-amber-900 border border-amber-200 px-2.5 py-0.5 rounded-full whitespace-nowrap">
                     {sortBy === 'byDate' ? 'الترتيب: حسب تاريخ الوثيقة' : sortBy === 'alphabetical' ? 'الترتيب: حسب الأبجدية' : 'الترتيب: أبجدياً حسب الصف'}
                   </span>
                 </div>
               </div>
 
               {/* Left: Date + Total count */}
-              <div className="text-left text-[8.5pt] font-bold leading-tight text-slate-800 w-56">
+              <div className="text-left text-[8.5pt] font-bold leading-tight text-slate-800 w-[27%] flex-shrink-0">
                 <div>تاريخ الطباعة: {printDate}</div>
                 <div>إجمالي الوثائق: {totalItems}</div>
               </div>
@@ -631,13 +636,13 @@ const DocsExportPrint = ({
             <table className="docs-table w-full">
               <thead>
                 <tr className="bg-slate-100 text-center">
-                  <th style={{ width: '30px' }} className="text-center font-bold">ت</th>
-                  <th style={{ width: isPortrait ? '82px' : '92px' }} className="text-center font-bold">تاريخ الوثيقة</th>
-                  <th style={{ width: isPortrait ? '195px' : '265px' }} className="text-right font-bold pr-2">اسم الطالب الرباعي</th>
-                  <th style={{ width: isPortrait ? '150px' : '230px' }} className="text-right font-bold pr-2">الجهة الصادر إليها</th>
-                  <th style={{ width: isPortrait ? '95px' : '130px' }} className="text-center font-bold">الغرض من الوثيقة</th>
-                  <th style={{ width: isPortrait ? '95px' : '135px' }} className="text-center font-bold">الصف الذي انتقل فيه</th>
-                  <th style={{ width: isPortrait ? '80px' : '130px' }} className="text-center font-bold">الملاحظات</th>
+                  <th style={{ width: '3.5%' }} className="text-center font-bold">ت</th>
+                  <th style={{ width: '9.5%' }} className="text-center font-bold">تاريخ الوثيقة</th>
+                  <th style={{ width: '28%' }} className="text-right font-bold pr-2">اسم الطالب الرباعي</th>
+                  <th style={{ width: '23%' }} className="text-right font-bold pr-2">الجهة الصادر إليها</th>
+                  <th style={{ width: '12%' }} className="text-center font-bold">الغرض من الوثيقة</th>
+                  <th style={{ width: '13%' }} className="text-center font-bold">الصف الذي انتقل فيه</th>
+                  <th style={{ width: '11%' }} className="text-center font-bold">الملاحظات</th>
                 </tr>
               </thead>
               <tbody>
@@ -2984,6 +2989,18 @@ export default function App() {
                         if (transferredCountForYear === 0) {
                           setAlertConfig({ message: 'لا توجد سجلات لوثائق منقولة للسنة المحددة', type: 'warning' });
                           return;
+                        }
+                        let styleEl = document.getElementById('docs-page-orientation-style') as HTMLStyleElement | null;
+                        if (!styleEl) {
+                          styleEl = document.createElement('style');
+                          styleEl.id = 'docs-page-orientation-style';
+                          document.head.appendChild(styleEl);
+                        }
+                        styleEl.innerHTML = `@page { size: ${docsOrientation}; margin: 4mm 5mm; }`;
+                        if (docsOrientation === 'landscape') {
+                          document.body.classList.add('print-landscape');
+                        } else {
+                          document.body.classList.remove('print-landscape');
                         }
                         setPrintMode('docsExport'); 
                         setShowPrintModal(false); 

@@ -49,7 +49,6 @@ html, body {
 /* Print Styles */
 @media print {
   @page { 
-      size: auto;
       margin: 4mm 5mm; 
   } 
   

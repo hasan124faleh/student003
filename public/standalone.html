@@ -78,7 +78,7 @@
       /* Print Styles */
       @media print {
         @page { 
-            margin: 0; 
+            margin: 4mm 5mm; 
         } 
         
         html, body { 
@@ -770,8 +770,8 @@
              }
              
              styleEl.innerHTML = isPortrait 
-               ? `@page { size: A4 portrait; margin: 4mm 4mm; }`
-               : `@page { size: A4 landscape; margin: 4mm 5mm; }`;
+               ? `@page { size: portrait; margin: 4mm 4mm; }`
+               : `@page { size: landscape; margin: 4mm 5mm; }`;
 
              if (!isPortrait) {
                document.body.classList.add('print-landscape');
