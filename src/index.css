@@ -75,9 +75,9 @@ html, body {
   .print-only { display: block !important; }
   
   .print-page-container {
-      width: 210mm;
-      height: 297mm;
-      padding: 10mm 15mm;
+      width: 200mm;
+      height: 282mm;
+      padding: 3mm 4mm;
       box-sizing: border-box;
       page-break-after: always;
       break-after: page;

@@ -669,15 +669,49 @@
           );
         };
 
-        // General Print View - SWAPPED: 'ص' before 'قيد'
-        const PrintView = ({ students, title, selectedFields = ['name', 'pageNumber', 'regNumber'] }) => {
+        // General Print View (كشف القيد العام) - مطابق تماماً لصفحات الجوال مع دعم التخطيط العرضي والعمودي
+        const PrintView = ({ 
+          students, 
+          title, 
+          selectedFields = ['name', 'pageNumber', 'regNumber'],
+          orientation = 'portrait'
+        }) => {
+          const isPortrait = orientation === 'portrait';
+
+          useEffect(() => {
+            let styleEl = document.getElementById('general-print-orientation-style');
+            if (!styleEl) {
+              styleEl = document.createElement('style');
+              styleEl.id = 'general-print-orientation-style';
+              document.head.appendChild(styleEl);
+            }
+            
+            styleEl.innerHTML = isPortrait 
+              ? `@page { size: portrait; margin: 4mm 5mm; }`
+              : `@page { size: landscape; margin: 4mm 5mm; }`;
+
+            if (!isPortrait) {
+              document.body.classList.add('print-landscape');
+            } else {
+              document.body.classList.remove('print-landscape');
+            }
+            return () => {
+              document.body.classList.remove('print-landscape');
+              if (styleEl && styleEl.parentNode) {
+                styleEl.parentNode.removeChild(styleEl);
+              }
+            };
+          }, [isPortrait]);
+
           const sortedStudents = useMemo(() => {
              return [...students].sort((a, b) => a.firstName.localeCompare(b.firstName)).map((s, i) => ({ ...s, printIndex: i + 1 }));
           }, [students]);
 
-          const ROWS_PER_COLUMN_MAX = 31; 
-          const COLUMNS_PER_PAGE = 2;
-          const MAX_ITEMS_PER_PAGE = ROWS_PER_COLUMN_MAX * COLUMNS_PER_PAGE;
+          // Portrait: 2 columns x 31 rows = 62 students per page (matching mobile)
+          // Landscape: 3 columns x 21 rows = 63 students per page
+          const ROWS_PER_COLUMN = isPortrait ? 31 : 21; 
+          const COLUMNS_PER_PAGE = isPortrait ? 2 : 3;
+          const MAX_ITEMS_PER_PAGE = ROWS_PER_COLUMN * COLUMNS_PER_PAGE;
           const totalItems = sortedStudents.length;
           const totalPages = Math.ceil(totalItems / MAX_ITEMS_PER_PAGE) || 1;
           const printDate = new Date().toLocaleDateString('ar-EG');
@@ -686,65 +720,180 @@
           for (let i = 0; i < totalPages; i++) {
             pages.push(sortedStudents.slice(i * MAX_ITEMS_PER_PAGE, (i + 1) * MAX_ITEMS_PER_PAGE));
           }
-          
+          if (pages.length === 0) {
+            pages.push([]);
+          }
+
+          const hasLastName = selectedFields.includes('lastName');
+          const hasStatus = selectedFields.includes('status');
+
           return (
-            <div className="print-only text-[9.5pt] dir-rtl">
+            <div className="print-only text-[9.5pt] dir-rtl font-cairo">
+              <style>{`
+                @page {
+                  size: ${isPortrait ? 'portrait' : 'landscape'};
+                  margin: 4mm 5mm;
+                }
+                @media print {
+                  html, body {
+                    width: ${isPortrait ? '210mm' : '297mm'} !important;
+                    max-width: ${isPortrait ? '210mm' : '297mm'} !important;
+                    min-width: ${isPortrait ? '210mm' : '297mm'} !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    height: auto !important;
+                    background: white !important;
+                    color: black !important;
+                    overflow: visible !important;
+                  }
+                  .no-print {
+                    display: none !important;
+                  }
+                  .print-only {
+                    display: block !important;
+                  }
+                  .general-print-page {
+                    width: ${isPortrait ? '200mm' : '287mm'} !important;
+                    height: ${isPortrait ? '282mm' : '196mm'} !important;
+                    max-height: ${isPortrait ? '282mm' : '196mm'} !important;
+                    box-sizing: border-box !important;
+                    page-break-after: always !important;
+                    break-after: page !important;
+                    page-break-inside: avoid !important;
+                    break-inside: avoid !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    justify-content: flex-start !important;
+                    padding: 2mm 3mm !important;
+                    background: white !important;
+                    overflow: hidden !important;
+                  }
+                  .general-print-page:last-child {
+                    page-break-after: auto !important;
+                    break-after: auto !important;
+                  }
+                  .general-table {
+                    width: 100% !important;
+                    border-collapse: collapse !important;
+                    table-layout: fixed !important;
+                  }
+                  .general-table th, .general-table td {
+                    border: 1px solid black !important;
+                    color: black !important;
+                    vertical-align: middle !important;
+                    white-space: nowrap !important;
+                    word-wrap: normal !important;
+                    overflow-wrap: normal !important;
+                    overflow: hidden !important;
+                    text-overflow: clip !important;
+                    box-sizing: border-box !important;
+                  }
+                  .general-table th {
+                    background-color: #f3f4f6 !important;
+                    font-weight: 800 !important;
+                    font-size: 8.5pt !important;
+                    height: 22px !important;
+                    padding: 1px 2px !important;
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                  }
+                  .general-table td {
+                    height: ${isPortrait ? '7.7mm' : '7.5mm'} !important;
+                    line-height: 1.15 !important;
+                    padding: 0 3px !important;
+                  }
+                }
+              `}</style>
+
               {pages.map((pageStudents, pageIndex) => (
-                <div key={pageIndex} className="print-page-container">
-                   <div className="flex justify-between items-end border-b-2 border-black pb-2 mb-4 w-full h-[40px]">
-                      <div className="text-[10px] font-medium text-gray-500 w-32 text-right">صفحة {pageIndex + 1} من {totalPages}</div>
-                      <h1 className="text-xl font-bold flex-1 text-center">{title || "كشف القيد العام"}</h1>
-                      <div className="text-[10px] font-medium text-gray-500 w-32 text-left">تاريخ: {printDate}</div>
-                   </div>
-                   <div className="flex flex-row gap-[8mm] flex-1">
-                     {[0, 1].map((colIndex) => {
-                       const colStudents = pageStudents.slice(colIndex * ROWS_PER_COLUMN_MAX, (colIndex + 1) * ROWS_PER_COLUMN_MAX);
-                       return (
-                         <div key={colIndex} className="flex-1 flex flex-col">
-                           <table className="w-full border-collapse table-fixed">
-                             <thead>
-                               <tr className="bg-gray-100 h-[36px]">
-                                 <th className="p-1 text-center w-[35px] text-[8.5pt]">ت</th>
-                                 {selectedFields.includes('name') && <th className="p-1 text-right">الاسم الكامل</th>}
-                                 {selectedFields.includes('lastName') && <th className="p-1 text-right">اللقب</th>}
-                                 {/* SWAPPED: Page Number before Registration Number */}
-                                 {selectedFields.includes('pageNumber') && <th className="p-1 text-center w-[40px] font-bold text-[8.5pt]">ص</th>}
-                                 {selectedFields.includes('regNumber') && <th className="p-1 text-center w-[40px] font-bold text-[8.5pt]">قيد</th>}
-                                 {selectedFields.includes('status') && <th className="p-1 text-center w-[50px] font-bold text-[8.5pt]">الحالة</th>}
-                                </tr>
-                             </thead>
-                             <tbody>
-                               {Array.from({ length: ROWS_PER_COLUMN_MAX }).map((_, rowIndex) => {
-                                 const s = colStudents[rowIndex];
-                                 const statusMap = { 'active': 'م', 'transferred': 'ن', 'left': 'ت', 'graduated': 'خ' };
-                                 return (
-                                   <tr key={rowIndex} className="h-[31px]">
-                                     <td className="px-1 text-center font-medium whitespace-nowrap">{s ? s.printIndex : ''}</td>
-                                     {selectedFields.includes('name') && (
-                                       <td className="px-2 align-middle whitespace-nowrap overflow-hidden leading-relaxed font-bold">{s ? cleanName(s.firstName) : ''}</td>
-                                     )}
-                                     {selectedFields.includes('lastName') && (
-                                       <td className="px-2 align-middle whitespace-nowrap overflow-hidden leading-relaxed font-bold">{s ? s.lastName || '' : ''}</td>
-                                     )}
-                                     {/* SWAPPED: Page cell before Reg cell */}
-                                     {selectedFields.includes('pageNumber') && (
-                                       <td className="px-1 text-center font-bold font-mono text-[10.5pt] align-middle">{s ? s.pageNumber : ''}</td>
-                                     )}
-                                     {selectedFields.includes('regNumber') && (
-                                       <td className="px-1 text-center font-bold font-mono text-[10.5pt] align-middle">{s ? s.regNumber : ''}</td>
-                                     )}
-                                     {selectedFields.includes('status') && (
-                                       <td className="px-1 text-center font-bold font-mono text-[10.5pt] align-middle">{s ? statusMap[s.status || 'active'] : ''}</td>
-                                     )}
-                                    </tr>
-                                 );
-                               })}
-                             </tbody>
-                           </table>
-                         </div>
-                       );
-                     })}
-                   </div>
+                <div key={pageIndex} className="general-print-page">
+                  {/* Header matching mobile preview */}
+                  <div className="flex justify-between items-center border-b-2 border-black pb-1 mb-2 w-full flex-shrink-0">
+                    <div className="text-[9pt] font-mono font-bold text-gray-700 w-32 text-right">
+                      صفحة {pageIndex + 1} من {totalPages}
+                    </div>
+                    <h1 className="text-xl font-black text-black flex-1 text-center font-cairo">
+                      {title || "كشف القيد العام"}
+                    </h1>
+                    <div className="text-[9pt] font-mono font-bold text-gray-700 w-32 text-left">
+                      تاريخ: {printDate}
+                    </div>
+                  </div>
+
+                  {/* Columns */}
+                  <div className="flex flex-row gap-2.5 sm:gap-3 flex-1 items-start">
+                    {Array.from({ length: COLUMNS_PER_PAGE }).map((_, colIndex) => {
+                      const colStudents = pageStudents.slice(colIndex * ROWS_PER_COLUMN, (colIndex + 1) * ROWS_PER_COLUMN);
+                      return (
+                        <div key={colIndex} className="flex-1 flex flex-col">
+                          <table className="general-table w-full">
+                            <thead>
+                              <tr className="bg-gray-100 text-center">
+                                <th style={{ width: '9%' }} className="text-center font-bold">ت</th>
+                                <th style={{ width: hasLastName || hasStatus ? '50%' : '63%' }} className="text-right font-bold pr-2">
+                                  الاسم الكامل
+                                </th>
+                                {hasLastName && (
+                                  <th style={{ width: '18%' }} className="text-right font-bold pr-1">اللقب</th>
+                                )}
+                                <th style={{ width: '14%' }} className="text-center font-bold">ص</th>
+                                <th style={{ width: '14%' }} className="text-center font-bold">قيد</th>
+                                {hasStatus && (
+                                  <th style={{ width: '14%' }} className="text-center font-bold">الحالة</th>
+                                )}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {Array.from({ length: ROWS_PER_COLUMN }).map((_, rowIndex) => {
+                                const s = colStudents[rowIndex];
+                                const studentFullName = s ? (hasLastName ? cleanName(s.firstName) : `${cleanName(s.firstName)} ${s.lastName || ''}`.trim()) : '';
+                                const statusMap = { 'active': 'م', 'transferred': 'ن', 'left': 'ت', 'graduated': 'خ' };
+
+                                const getNameStyle = (name) => {
+                                  const len = name.length;
+                                  if (len <= 20) return { fontSize: '8.2pt', letterSpacing: 'normal' };
+                                  if (len <= 26) return { fontSize: '7.4pt', letterSpacing: '-0.15px' };
+                                  if (len <= 32) return { fontSize: '6.6pt', letterSpacing: '-0.25px' };
+                                  return { fontSize: '6.0pt', letterSpacing: '-0.35px' };
+                                };
+
+                                return (
+                                  <tr key={rowIndex} style={{ height: isPortrait ? '7.7mm' : '7.5mm' }}>
+                                    <td className="text-center font-bold font-mono text-[8pt]">
+                                      {s ? s.printIndex : ''}
+                                    </td>
+                                    <td 
+                                      className="text-right font-bold pr-2 whitespace-nowrap overflow-hidden"
+                                      style={getNameStyle(studentFullName)}
+                                      title={studentFullName}
+                                    >
+                                      {studentFullName}
+                                    </td>
+                                    {hasLastName && (
+                                      <td className="text-right font-bold pr-1 whitespace-nowrap overflow-hidden text-[7.8pt]">
+                                        {s ? (s.lastName || '') : ''}
+                                      </td>
+                                    )}
+                                    <td className="text-center font-bold font-mono text-[9pt]">
+                                      {s ? s.pageNumber : ''}
+                                    </td>
+                                    <td className="text-center font-bold font-mono text-[9pt]">
+                                      {s ? s.regNumber : ''}
+                                    </td>
+                                    {hasStatus && (
+                                      <td className="text-center font-bold font-mono text-[8.5pt]">
+                                        {s ? statusMap[s.status || 'active'] : ''}
+                                      </td>
+                                    )}
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ))}
             </div>
@@ -1142,6 +1291,7 @@
           const [importing, setImporting] = useState(false);
           const [importProgress, setImportProgress] = useState(0);
           const [printMode, setPrintMode] = useState('list');
+          const [listOrientation, setListOrientation] = useState('portrait');
            const [docsExportYear, setDocsExportYear] = useState('ALL');
            const [docsExportSort, setDocsExportSort] = useState('byDate');
            const [docsOrientation, setDocsOrientation] = useState('landscape');
@@ -3163,9 +3313,26 @@
 
                           {/* القسم 1: سجل القيد العام */}
                           <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2.5">
-                            <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5 border-b border-slate-200 pb-1.5">
-                              <FileSpreadsheet size={15} className="text-blue-600" />
-                              <span>سجل القيد العام</span>
+                            <div className="text-xs font-bold text-slate-700 flex items-center justify-between border-b border-slate-200 pb-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <FileSpreadsheet size={15} className="text-blue-600" />
+                                <span>سجل القيد العام</span>
+                              </div>
+                              <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                                {listOrientation === 'portrait' ? 'عمودي (62 طالب/صفحة)' : 'عرضي (63 طالب/صفحة)'}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <label className="text-[11px] font-bold text-slate-600 shrink-0">تخطيط الصفحة:</label>
+                              <select 
+                                value={listOrientation} 
+                                onChange={(e) => setListOrientation(e.target.value)} 
+                                className="flex-1 p-1.5 border border-slate-200 rounded-xl text-xs bg-white text-slate-800 font-bold outline-none cursor-pointer"
+                              >
+                                <option value="portrait">عمودي (طولي) - مطابق لصفحات الجوال (عمودين)</option>
+                                <option value="landscape">أفقي (عرضي) - ورقة عرضية (3 أعمدة)</option>
+                              </select>
                             </div>
 
                             <button 
@@ -3179,7 +3346,7 @@
                               }} 
                               className={`w-full py-2.5 ${currentTheme.primary} ${currentTheme.hover} text-white rounded-xl font-bold transition-colors text-xs flex items-center justify-center gap-2 shadow-sm`}
                             >
-                              <Printer size={15} /> طباعة السجل الحالي بالكامل
+                              <Printer size={15} /> طباعة السجل بالكامل ({listOrientation === 'portrait' ? 'عمودي' : 'عرضي'})
                             </button>
 
                             <div className="pt-1 space-y-2">
@@ -3540,9 +3707,9 @@
                 )}
               </div>
               
-              {printMode === 'list' && <PrintView students={filtered} title={selectedRegFilter ? `كشف الطلاب - قيد رقم ${selectedRegFilter}` : "كشف القيد العام"} selectedFields={printTemplateFields} />}
+              {printMode === 'list' && <PrintView students={filtered} title={selectedRegFilter ? `كشف الطلاب - قيد رقم ${selectedRegFilter}` : "كشف القيد العام"} selectedFields={printTemplateFields} orientation={listOrientation} />}
               {printMode === 'single' && students.find(s=>s.id===selectedId) && <SingleStudentPrint student={students.find(s=>s.id===selectedId)} />}
-              {printMode === 'selected' && <PrintView students={students.filter(s => selectedStudents.includes(s.id) && !s.isDeleted)} title="الطلاب المحددين" selectedFields={printTemplateFields} />}
+              {printMode === 'selected' && <PrintView students={students.filter(s => selectedStudents.includes(s.id) && !s.isDeleted)} title="الطلاب المحددين" selectedFields={printTemplateFields} orientation={listOrientation} />}
               {printMode === 'docsExport' && <DocsExportPrint students={students} selectedYear={docsExportYear} sortBy={docsExportSort} orientation={docsOrientation} />}
             </>
           );
