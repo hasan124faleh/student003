@@ -431,6 +431,17 @@ const DocsExportPrint = ({
   const isPortrait = orientation === 'portrait';
 
   useEffect(() => {
+    const originalTitle = document.title;
+    const docTitle = selectedYear && selectedYear !== 'ALL'
+      ? `صادر الوثائق لسنة ${selectedYear}`
+      : 'صادر الوثائق - جميع السنوات';
+    document.title = docTitle;
+
+    const handleAfterPrint = () => {
+      document.title = 'سجل القيد العام';
+    };
+    window.addEventListener('afterprint', handleAfterPrint);
+
     let styleEl = document.getElementById('docs-page-orientation-style') as HTMLStyleElement | null;
     if (!styleEl) {
       styleEl = document.createElement('style');
@@ -440,7 +451,7 @@ const DocsExportPrint = ({
     
     styleEl.innerHTML = isPortrait 
       ? `@page { size: portrait; margin: 4mm 4mm; }`
-      : `@page { size: landscape; margin: 4mm 5mm; }`;
+      : `@page { size: landscape; margin: 3mm 4mm; }`;
 
     if (!isPortrait) {
       document.body.classList.add('print-landscape');
@@ -448,12 +459,14 @@ const DocsExportPrint = ({
       document.body.classList.remove('print-landscape');
     }
     return () => {
+      document.title = 'سجل القيد العام';
+      window.removeEventListener('afterprint', handleAfterPrint);
       document.body.classList.remove('print-landscape');
       if (styleEl && styleEl.parentNode) {
         styleEl.parentNode.removeChild(styleEl);
       }
     };
-  }, [isPortrait]);
+  }, [isPortrait, selectedYear]);
 
   const transferredStudents = useMemo(() => {
     let list = students.filter(s => !s.isDeleted && (s.status === 'transferred' || !!s.docDestination || !!s.docDate));
@@ -517,7 +530,7 @@ const DocsExportPrint = ({
       <style>{`
         @page {
           size: ${isPortrait ? 'portrait' : 'landscape'};
-          margin: ${isPortrait ? '4mm 4mm' : '4mm 5mm'};
+          margin: ${isPortrait ? '4mm 4mm' : '3mm 4mm'};
         }
         @media print {
           html, body {
@@ -539,8 +552,8 @@ const DocsExportPrint = ({
           }
           .docs-print-page {
             width: ${isPortrait ? '202mm' : '289mm'} !important;
-            height: ${isPortrait ? '287mm' : '204mm'} !important;
-            max-height: ${isPortrait ? '287mm' : '204mm'} !important;
+            height: ${isPortrait ? '280mm' : '198mm'} !important;
+            max-height: ${isPortrait ? '280mm' : '198mm'} !important;
             box-sizing: border-box !important;
             page-break-after: always !important;
             break-after: page !important;
@@ -549,7 +562,7 @@ const DocsExportPrint = ({
             display: flex !important;
             flex-direction: column !important;
             justify-content: space-between !important;
-            padding: ${isPortrait ? '2mm 3mm' : '1.5mm 3mm'} !important;
+            padding: ${isPortrait ? '2mm 3mm' : '1mm 3mm'} !important;
             background: white !important;
             overflow: hidden !important;
           }
@@ -575,21 +588,23 @@ const DocsExportPrint = ({
           .docs-table th {
             background-color: #f1f5f9 !important;
             font-weight: 800 !important;
-            font-size: ${isPortrait ? '8pt' : '8.5pt'} !important;
-            height: ${isPortrait ? '23px' : '21.5px'} !important;
+            font-size: ${isPortrait ? '8pt' : '8.2pt'} !important;
+            height: ${isPortrait ? '23px' : '19px'} !important;
             padding: 1px 3px !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
           .docs-table td {
-            font-size: ${isPortrait ? '7.5pt' : '8.0pt'} !important;
-            height: ${isPortrait ? '8.2mm' : '5.75mm'} !important;
+            font-size: ${isPortrait ? '7.5pt' : '7.8pt'} !important;
+            height: ${isPortrait ? '8.0mm' : '5.35mm'} !important;
             line-height: 1.15 !important;
             padding: 0 3px !important;
           }
           .docs-page-footer {
-            height: 18px !important;
+            height: 17px !important;
             box-sizing: border-box !important;
+            break-before: avoid !important;
+            page-break-before: avoid !important;
           }
         }
       `}</style>
@@ -597,12 +612,21 @@ const DocsExportPrint = ({
       {pages.map((pageRows, pageIdx) => (
         <div key={pageIdx} className="docs-print-page">
           <div className="flex-1 flex flex-col justify-start">
-            {/* Minimal Official Header: Only Title and School Name as requested */}
-            <div className="text-center border-b-2 border-slate-900 pb-1 mb-1 w-full">
-              <div className="text-xl font-black text-slate-900 tracking-wide font-cairo leading-snug">
-                سجل صادر الوثائق
+            {/* Minimal Official Header: Title with Year badge and School Name */}
+            <div className="text-center border-b-2 border-slate-900 pb-1 mb-1 w-full flex-shrink-0">
+              <div className="text-lg sm:text-xl font-black text-slate-900 tracking-wide font-cairo leading-snug flex items-center justify-center gap-2">
+                <span>سجل صادر الوثائق</span>
+                {selectedYear && selectedYear !== 'ALL' ? (
+                  <span className="text-xs sm:text-sm font-bold bg-slate-100 text-slate-800 px-2.5 py-0.5 rounded-full border border-slate-400 font-mono">
+                    لسنة {selectedYear}
+                  </span>
+                ) : (
+                  <span className="text-xs sm:text-sm font-bold bg-slate-100 text-slate-800 px-2.5 py-0.5 rounded-full border border-slate-400">
+                    (جميع السنوات)
+                  </span>
+                )}
               </div>
-              <div className="text-sm font-bold text-slate-800 mt-0.5">
+              <div className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5">
                 ث. ش. محمد عبدالعزيز الكنعان للبنين
               </div>
             </div>
@@ -676,7 +700,7 @@ const DocsExportPrint = ({
                   };
 
                   return (
-                    <tr key={rIdx} style={{ height: isPortrait ? '8.2mm' : '5.75mm' }}>
+                    <tr key={rIdx} style={{ height: isPortrait ? '8.0mm' : '5.35mm' }}>
                       <td className="text-center font-bold font-mono">{s ? serial : ''}</td>
                       <td className="text-center font-mono font-bold whitespace-nowrap text-[7.2pt] sm:text-[7.8pt]">{s ? (s.docDate || '—') : ''}</td>
                       <td 
@@ -716,7 +740,7 @@ const DocsExportPrint = ({
           </div>
 
           {/* Page Footer with Print Date, School Log Title, and Page Sequence */}
-          <div className="docs-page-footer pt-1 border-t-2 border-slate-900 mt-0.5 flex justify-between items-center px-4 text-xs font-bold text-slate-700">
+          <div className="docs-page-footer pt-1 border-t-2 border-slate-900 mt-0.5 flex justify-between items-center px-4 text-xs font-bold text-slate-700 flex-shrink-0">
             <div className="text-[8.5pt] font-bold text-slate-800">تاريخ الطباعة: {printDate}</div>
             <div className="text-[8.5pt] font-bold text-slate-800">سجل صادر الوثائق - ث. ش. محمد عبدالعزيز الكنعان للبنين</div>
             <div className="text-[9pt] font-black text-slate-900 bg-slate-100 px-3 py-0.5 rounded border border-slate-400 font-mono">
@@ -2847,6 +2871,7 @@ export default function App() {
                     <button 
                       type="button"
                       onClick={() => { 
+                        document.title = 'سجل القيد العام';
                         setPrintMode('list'); 
                         setPrintRegInput(''); 
                         setShowPrintModal(false); 
@@ -2873,6 +2898,7 @@ export default function App() {
                         <button 
                           type="button"
                           onClick={() => { 
+                            document.title = 'سجل القيد العام';
                             setPrintMode('list'); 
                             setSelectedRegFilter(printRegInput); 
                             setShowPrintModal(false); 
@@ -2992,13 +3018,17 @@ export default function App() {
                           setAlertConfig({ message: 'لا توجد سجلات لوثائق منقولة للسنة المحددة', type: 'warning' });
                           return;
                         }
+                        const exportDocTitle = docsExportYear && docsExportYear !== 'ALL'
+                          ? `صادر الوثائق لسنة ${docsExportYear}`
+                          : 'صادر الوثائق - جميع السنوات';
+                        document.title = exportDocTitle;
                         let styleEl = document.getElementById('docs-page-orientation-style') as HTMLStyleElement | null;
                         if (!styleEl) {
                           styleEl = document.createElement('style');
                           styleEl.id = 'docs-page-orientation-style';
                           document.head.appendChild(styleEl);
                         }
-                        styleEl.innerHTML = `@page { size: ${docsOrientation}; margin: 4mm 5mm; }`;
+                        styleEl.innerHTML = `@page { size: ${docsOrientation}; margin: ${docsOrientation === 'portrait' ? '4mm 4mm' : '3mm 4mm'}; }`;
                         if (docsOrientation === 'landscape') {
                           document.body.classList.add('print-landscape');
                         } else {
