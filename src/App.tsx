@@ -11,7 +11,9 @@ import {
   AlertCircle, ArrowUp, RotateCcw, Info, Calendar, 
   ArrowLeft, Palette, Loader2, BarChart3, Moon, Sun, 
   Mic, Maximize2, Minimize2, WifiOff, Share2, 
-  MessageSquare, CheckSquare, Check, Filter
+  MessageSquare, CheckSquare, Check, Filter,
+  Sparkles, LayoutTemplate, LayoutGrid, List, Eye, Edit2, 
+  GraduationCap, School, SlidersHorizontal, TrendingUp
 } from 'lucide-react';
 import { initializeApp } from "firebase/app";
 import { 
@@ -424,19 +426,16 @@ const PrintView = ({
           }
           .general-print-page {
             width: ${isPortrait ? '200mm' : '287mm'} !important;
-            height: ${isPortrait ? '282mm' : '196mm'} !important;
-            max-height: ${isPortrait ? '282mm' : '196mm'} !important;
+            max-width: ${isPortrait ? '200mm' : '287mm'} !important;
             box-sizing: border-box !important;
             page-break-after: always !important;
             break-after: page !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: flex-start !important;
-            padding: 2mm 3mm !important;
+            display: block !important;
+            padding: 1.5mm 2.5mm !important;
             background: white !important;
-            overflow: hidden !important;
+            overflow: visible !important;
           }
           .general-print-page:last-child {
             page-break-after: auto !important;
@@ -468,7 +467,7 @@ const PrintView = ({
             print-color-adjust: exact !important;
           }
           .general-table td {
-            height: ${isPortrait ? '7.7mm' : '7.5mm'} !important;
+            height: ${isPortrait ? '7.4mm' : '7.3mm'} !important;
             line-height: 1.15 !important;
             padding: 0 3px !important;
           }
@@ -528,7 +527,7 @@ const PrintView = ({
                         };
 
                         return (
-                          <tr key={rowIndex} style={{ height: isPortrait ? '7.7mm' : '7.5mm' }}>
+                          <tr key={rowIndex} style={{ height: isPortrait ? '7.4mm' : '7.3mm' }}>
                             <td className="text-center font-bold font-mono text-[8pt]">
                               {s ? s.printIndex : ''}
                             </td>
@@ -945,6 +944,757 @@ const themeColors: Record<string, { primary: string; hover: string; secondary: s
   amber: { primary: 'bg-amber-900', hover: 'hover:bg-amber-800', secondary: 'bg-orange-600', secondaryHover: 'hover:bg-orange-700', ring: 'focus:ring-orange-500', name: 'برتقالي' },
 };
 
+interface ModernAppLayoutProps {
+  students: Student[];
+  filtered: Student[];
+  displayed: Student[];
+  selectedStudents: string[];
+  setSelectedStudents: React.Dispatch<React.SetStateAction<string[]>>;
+  search: string;
+  setSearch: (s: string) => void;
+  searchInputRef: React.RefObject<HTMLInputElement | null>;
+  isListening: boolean;
+  startVoiceSearch: () => void;
+  inSearchMode: boolean;
+  setIsSearchActive: (b: boolean) => void;
+  showSearchFilters: boolean;
+  setShowSearchFilters: React.Dispatch<React.SetStateAction<boolean>>;
+  selectedRegFilter: string;
+  setSelectedRegFilter: (r: string) => void;
+  statusFilter: string;
+  setStatusFilter: (s: string) => void;
+  sortBy: string;
+  setSortBy: (s: string) => void;
+  yearFilter: string;
+  setYearFilter: (y: string) => void;
+  years: (string | number)[];
+  regsCount: number;
+  alphabetLetters: string[];
+  studentsByLetter: Record<string, Student[]>;
+  currentTheme: { primary: string; hover: string; secondary: string; secondaryHover: string; ring: string; name: string };
+  setSelectedId: (id: string | null) => void;
+  setView: (v: 'list' | 'add' | 'edit' | 'detail' | 'trash' | 'settings' | 'stats') => void;
+  setSimilarStudents: (s: Student[]) => void;
+  setPrintMode: (m: 'list' | 'single' | 'selected' | 'docsExport') => void;
+  setShowPrintModal: (b: boolean) => void;
+  setShowPrintTemplateModal: (b: boolean) => void;
+  setShowPrintSelectedModal: (b: boolean) => void;
+  handleDelete: (id: string) => void;
+  handleRestore: (id: string) => void;
+  handleDeleteForever: (id: string) => void;
+  handleBulkDelete: () => void;
+  shareViaWhatsApp: (students: Student[]) => void;
+  cleanName: (name: string) => string;
+  modernViewType: 'table' | 'grid';
+  setModernViewType: (t: 'table' | 'grid') => void;
+  view: string;
+  debouncedQuery: string;
+}
+
+const ModernAppLayout = ({
+  students,
+  filtered,
+  displayed,
+  selectedStudents,
+  setSelectedStudents,
+  search,
+  setSearch,
+  searchInputRef,
+  isListening,
+  startVoiceSearch,
+  inSearchMode,
+  setIsSearchActive,
+  showSearchFilters,
+  setShowSearchFilters,
+  selectedRegFilter,
+  setSelectedRegFilter,
+  statusFilter,
+  setStatusFilter,
+  sortBy,
+  setSortBy,
+  yearFilter,
+  setYearFilter,
+  years,
+  regsCount,
+  alphabetLetters,
+  studentsByLetter,
+  currentTheme,
+  setSelectedId,
+  setView,
+  setSimilarStudents,
+  setPrintMode,
+  setShowPrintModal,
+  setShowPrintTemplateModal,
+  setShowPrintSelectedModal,
+  handleDelete,
+  handleBulkDelete,
+  shareViaWhatsApp,
+  cleanName,
+  modernViewType,
+  setModernViewType,
+  debouncedQuery,
+}: ModernAppLayoutProps) => {
+  const activeCount = useMemo(() => students.filter(s => !s.isDeleted && (s.status === 'active' || !s.status)).length, [students]);
+  const transferredCount = useMemo(() => students.filter(s => !s.isDeleted && (s.status === 'transferred' || !!s.docDestination || !!s.docDate)).length, [students]);
+  const leftCount = useMemo(() => students.filter(s => !s.isDeleted && s.status === 'left').length, [students]);
+  const graduatedCount = useMemo(() => students.filter(s => !s.isDeleted && s.status === 'graduated').length, [students]);
+  const totalCount = useMemo(() => students.filter(s => !s.isDeleted).length, [students]);
+
+  return (
+    <div className="space-y-4 animate-fade-in">
+      {/* 1. Modern Hero Stats Cards */}
+      {!inSearchMode && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Card 1: Total Students */}
+          <div 
+            onClick={() => {
+              setSelectedRegFilter('');
+              setStatusFilter('ALL');
+              setYearFilter('ALL');
+              setSearch('');
+            }}
+            className="glass-panel modern-card-hover p-4 rounded-2xl cursor-pointer relative overflow-hidden group select-none border border-slate-200/90 dark:border-slate-800"
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl group-hover:scale-125 transition-transform"></div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">إجمالي الطلاب</span>
+              <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 shadow-xs">
+                <Users size={18} />
+              </div>
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-slate-100 font-mono tracking-tight">
+              {totalCount}
+            </div>
+            <div className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mt-1 flex items-center gap-1">
+              <span>جميع القيود والسنوات</span>
+            </div>
+          </div>
+
+          {/* Card 2: Active Students */}
+          <div 
+            onClick={() => setStatusFilter(statusFilter === 'active' ? 'ALL' : 'active')}
+            className={`glass-panel modern-card-hover p-4 rounded-2xl cursor-pointer relative overflow-hidden group select-none border transition-all ${
+              statusFilter === 'active' 
+                ? 'ring-2 ring-emerald-500/50 border-emerald-500/60 bg-emerald-500/5' 
+                : 'border-slate-200/90 dark:border-slate-800'
+            }`}
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl group-hover:scale-125 transition-transform"></div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">الطلاب المستمرون</span>
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shadow-xs">
+                <GraduationCap size={18} />
+              </div>
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 font-mono tracking-tight">
+              {activeCount}
+            </div>
+            <div className="text-[11px] font-semibold text-emerald-700/80 dark:text-emerald-400/80 mt-1 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>مستمر بالدراسة</span>
+            </div>
+          </div>
+
+          {/* Card 3: Transferred & Outgoing Docs */}
+          <div 
+            onClick={() => setStatusFilter(statusFilter === 'transferred' ? 'ALL' : 'transferred')}
+            className={`glass-panel modern-card-hover p-4 rounded-2xl cursor-pointer relative overflow-hidden group select-none border transition-all ${
+              statusFilter === 'transferred' 
+                ? 'ring-2 ring-amber-500/50 border-amber-500/60 bg-amber-500/5' 
+                : 'border-slate-200/90 dark:border-slate-800'
+            }`}
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl group-hover:scale-125 transition-transform"></div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">صادر الوثائق والنقل</span>
+              <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 shadow-xs">
+                <FileText size={18} />
+              </div>
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400 font-mono tracking-tight">
+              {transferredCount}
+            </div>
+            <div className="text-[11px] font-semibold text-amber-700/80 dark:text-amber-400/80 mt-1 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+              <span>وثيقة صادرة / منقول</span>
+            </div>
+          </div>
+
+          {/* Card 4: Reg Books & Stats */}
+          <div 
+            onClick={() => setView('stats')}
+            className="glass-panel modern-card-hover p-4 rounded-2xl cursor-pointer relative overflow-hidden group select-none border border-slate-200/90 dark:border-slate-800"
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/10 rounded-full blur-2xl group-hover:scale-125 transition-transform"></div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">دفاتر القيود</span>
+              <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 shadow-xs">
+                <FileSpreadsheet size={18} />
+              </div>
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-purple-600 dark:text-purple-400 font-mono tracking-tight">
+              {regsCount}
+            </div>
+            <div className="text-[11px] font-semibold text-purple-700/80 dark:text-purple-400/80 mt-1 flex items-center gap-1">
+              <span>انقر لعرض الإحصائيات 📊</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Modern Command Search & Actions Bar */}
+      <div className="glass-panel modern-card-shadow rounded-2xl p-3 space-y-2.5 border border-slate-200/90 dark:border-slate-800">
+        <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
+          {/* Search Input Box */}
+          <div className={`relative flex-1 flex items-center bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-1.5 focus-within:ring-2 ${currentTheme.ring} transition-all`}>
+            <Search className="text-slate-400 ml-2 shrink-0" size={17} />
+            <input 
+              ref={searchInputRef}
+              className="flex-1 bg-transparent outline-none text-slate-800 dark:text-slate-100 font-bold text-xs sm:text-sm placeholder:text-slate-400"
+              placeholder="ابحث باسم الطالب، اللقب، أو جزء من الاسم... (Ctrl+F)"
+              value={search}
+              onFocus={() => setIsSearchActive(true)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                if (e.target.value) setIsSearchActive(true);
+              }}
+            />
+            {search.length > 0 && (
+              <button 
+                type="button"
+                onClick={() => { setSearch(''); searchInputRef.current?.focus(); }}
+                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 transition-colors mx-1 shrink-0 cursor-pointer"
+                title="مسح البحث"
+              >
+                <X size={15} />
+              </button>
+            )}
+            <button 
+              type="button"
+              onClick={startVoiceSearch}
+              className={`p-1.5 rounded-lg transition-all shrink-0 cursor-pointer ${isListening ? 'bg-red-100 text-red-600 voice-listening' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400'}`}
+              title="بحث صوتي"
+            >
+              <Mic size={16} />
+            </button>
+            {inSearchMode && (
+              <button 
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setIsSearchActive(false);
+                  setShowSearchFilters(false);
+                  searchInputRef.current?.blur();
+                }}
+                className="text-xs font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/40 mr-1 shrink-0 border border-blue-200 dark:border-blue-800 cursor-pointer"
+              >
+                إلغاء
+              </button>
+            )}
+          </div>
+
+          {/* Primary Action Toolbar */}
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
+            <button 
+              onClick={() => { setSelectedId(null); setView('add'); setSimilarStudents([]); }} 
+              className={`flex-1 sm:flex-initial px-3.5 py-2 ${currentTheme.primary} ${currentTheme.hover} text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer`}
+              title="إضافة طالب جديد (Ctrl+N)"
+            >
+              <Plus size={16} />
+              <span>طالب جديد</span>
+            </button>
+
+            <button 
+              onClick={() => setShowPrintModal(true)} 
+              className="px-3.5 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs transition-colors cursor-pointer"
+              title="طباعة السجل (Ctrl+P)"
+            >
+              <Printer size={16} className="text-blue-600 dark:text-blue-400" />
+              <span>طباعة</span>
+            </button>
+
+            {/* Toggle Filter Button */}
+            <button 
+              onClick={() => setShowSearchFilters(prev => !prev)} 
+              className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                showSearchFilters || selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL'
+                  ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 shadow-xs'
+                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
+              }`}
+              title="تصفية السجلات"
+            >
+              <Filter size={15} />
+              <span>فلاتر</span>
+              {(selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL') && (
+                <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+              )}
+            </button>
+
+            {/* View Mode Switcher: Table vs Cards */}
+            <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+              <button 
+                onClick={() => setModernViewType('table')} 
+                className={`p-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                  modernViewType === 'table' 
+                    ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs' 
+                    : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
+                }`}
+                title="عرض الجدول"
+              >
+                <List size={15} />
+              </button>
+              <button 
+                onClick={() => setModernViewType('grid')} 
+                className={`p-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                  modernViewType === 'grid' 
+                    ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs' 
+                    : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
+                }`}
+                title="عرض البطاقات"
+              >
+                <LayoutGrid size={15} />
+              </button>
+            </div>
+
+            <button 
+              onClick={() => setShowPrintTemplateModal(true)} 
+              className="p-2 bg-white dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs transition-colors cursor-pointer"
+              title="تخصيص أعمدة الطباعة"
+            >
+              <SlidersHorizontal size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Filter Drawer Strip */}
+        {(showSearchFilters || selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL') && (
+          <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800 space-y-2 animate-fade-in">
+            {/* Status Tabs */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {[
+                { id: 'ALL', label: 'الكل', count: totalCount },
+                { id: 'active', label: 'مستمر', count: activeCount },
+                { id: 'transferred', label: 'منقول', count: transferredCount },
+                { id: 'left', label: 'تارك', count: leftCount },
+                { id: 'graduated', label: 'متخرج', count: graduatedCount }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setStatusFilter(tab.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    statusFilter === tab.id
+                      ? `${currentTheme.primary} text-white shadow-xs`
+                      : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                    statusFilter === tab.id ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                  }`}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* Select Dropdowns Row */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+              <select 
+                value={selectedRegFilter} 
+                onChange={(e) => setSelectedRegFilter(e.target.value)} 
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-bold outline-none text-slate-800 dark:text-slate-200 cursor-pointer"
+              >
+                <option value="">جميع دفاتر القيود</option>
+                {Array.from(new Set(students.filter(s => !s.isDeleted).map(s => s.regNumber))).sort((a,b) => Number(a)-Number(b)).map(r => (
+                  <option key={r} value={r}>قيد {r}</option>
+                ))}
+              </select>
+
+              <select 
+                value={sortBy} 
+                onChange={e => setSortBy(e.target.value)} 
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-bold outline-none text-slate-800 dark:text-slate-200 cursor-pointer"
+              >
+                <option value="recent">الترتيب: الأحدث أولاً</option>
+                <option value="alphabetical">الترتيب: أبجدي (أ - ي)</option>
+                <option value="byPage">الترتيب: حسب رقم الصفحة</option>
+              </select>
+
+              <select 
+                value={yearFilter} 
+                onChange={e => setYearFilter(e.target.value)} 
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-bold outline-none text-slate-800 dark:text-slate-200 cursor-pointer"
+              >
+                <option value="ALL">جميع سنوات القيد</option>
+                {years.map(y => <option key={y} value={y}>سنة {y}</option>)}
+              </select>
+
+              {(selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL') ? (
+                <button 
+                  onClick={() => {
+                    setSelectedRegFilter('');
+                    setStatusFilter('ALL');
+                    setYearFilter('ALL');
+                  }}
+                  className="bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-xl px-2.5 py-1.5 text-xs font-bold hover:bg-rose-100 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <RotateCcw size={13} />
+                  <span>إعادة ضبط الفلاتر</span>
+                </button>
+              ) : (
+                <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center justify-center">
+                  إجمالي النتائج: {filtered.length} طالب
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 3. Modern Alphabet Rail */}
+      {sortBy === 'alphabetical' && !debouncedQuery && alphabetLetters.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto py-1 px-1 no-scrollbar glass-panel rounded-2xl border border-slate-200/80 dark:border-slate-800 animate-fade-in">
+          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 px-2 shrink-0">فهرس الحروف:</span>
+          {alphabetLetters.map(letter => (
+            <button
+              key={letter}
+              onClick={() => {
+                const offset = 120;
+                const el = document.getElementById(`section-${letter}`) || document.getElementById(`mobile-section-${letter}`);
+                if (el) {
+                  const top = el.getBoundingClientRect().top + window.pageYOffset - offset;
+                  window.scrollTo({ top, behavior: 'smooth' });
+                }
+              }}
+              className="w-7 h-7 shrink-0 rounded-lg text-xs font-black flex items-center justify-center bg-slate-100 hover:bg-blue-600 hover:text-white dark:bg-slate-800 dark:text-slate-200 transition-all cursor-pointer"
+            >
+              {letter}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 4. Modern Data Presentation */}
+      {modernViewType === 'table' ? (
+        /* Modern Dense Table View */
+        <div className="glass-panel modern-card-shadow rounded-2xl border border-slate-200/90 dark:border-slate-800 overflow-hidden">
+          <div className="p-3 bg-slate-50/70 dark:bg-slate-900/70 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+            <div className="flex items-center gap-2">
+              <span>سجل الطلاب ({filtered.length})</span>
+              {selectedStudents.length > 0 && (
+                <span className="bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-full text-[10px]">
+                  {selectedStudents.length} محدد
+                </span>
+              )}
+            </div>
+            <div className="text-[11px] text-slate-400">
+              {sortBy === 'alphabetical' ? 'مرتب أبجدياً' : sortBy === 'byPage' ? 'مرتب حسب الصفحة' : 'مرتب بالأحدث'}
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-right border-collapse">
+              <thead className="bg-slate-100/70 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 text-[11px] font-bold border-b border-slate-200 dark:border-slate-700">
+                <tr>
+                  <th className="p-2.5 w-10 text-center">
+                    <input 
+                      type="checkbox" 
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedStudents(displayed.map(s => s.id));
+                        else setSelectedStudents([]);
+                      }}
+                      checked={displayed.length > 0 && displayed.every(s => selectedStudents.includes(s.id))}
+                      className="rounded border-slate-300 cursor-pointer"
+                    />
+                  </th>
+                  <th className="p-2.5 w-12 text-center">#</th>
+                  <th className="p-2.5">اسم الطالب الكامل</th>
+                  {/* SWAPPED: الصفحة then القيد */}
+                  <th className="p-2.5 w-24 text-center">الصفحة (ص)</th>
+                  <th className="p-2.5 w-24 text-center">رقم القيد</th>
+                  <th className="p-2.5 w-28 text-center">الحالة الدراسية</th>
+                  <th className="p-2.5 w-36 text-center">إجراءات</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                {displayed.map((s, idx) => {
+                  const isSelected = selectedStudents.includes(s.id);
+                  const firstLetter = cleanName(s.firstName).charAt(0) || 'ط';
+                  return (
+                    <tr 
+                      key={s.id}
+                      onClick={() => { setSelectedId(s.id); setView('detail'); }}
+                      className={`hover:bg-blue-50/50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group ${
+                        isSelected ? 'bg-blue-50/30 dark:bg-blue-950/20' : ''
+                      }`}
+                    >
+                      <td className="p-2.5 text-center" onClick={e => e.stopPropagation()}>
+                        <input 
+                          type="checkbox" 
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedStudents([...selectedStudents, s.id]);
+                            else setSelectedStudents(selectedStudents.filter(id => id !== s.id));
+                          }}
+                          className="rounded border-slate-300 cursor-pointer"
+                        />
+                      </td>
+                      <td className="p-2.5 text-center font-mono text-slate-400 font-bold">
+                        {idx + 1}
+                      </td>
+                      <td className="p-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-black text-xs flex items-center justify-center shrink-0 border border-slate-200/80 dark:border-slate-700">
+                            {firstLetter}
+                          </div>
+                          <div>
+                            <div className="font-black text-slate-800 dark:text-slate-100 text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                              {cleanName(s.firstName)}
+                            </div>
+                            {s.lastName && (
+                              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                اللقب: {s.lastName}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-2.5 text-center">
+                        <span className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 px-2 py-0.5 rounded-lg font-mono font-bold text-xs">
+                          ص {s.pageNumber}
+                        </span>
+                      </td>
+                      <td className="p-2.5 text-center">
+                        <span className={`${currentTheme.primary} text-white px-2 py-0.5 rounded-lg font-mono font-bold text-xs`}>
+                          قيد {s.regNumber}
+                        </span>
+                      </td>
+                      <td className="p-2.5 text-center">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                          s.status === 'graduated' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' :
+                          s.status === 'left' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' :
+                          s.status === 'transferred' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' :
+                          'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            s.status === 'graduated' ? 'bg-blue-600' :
+                            s.status === 'left' ? 'bg-rose-600' :
+                            s.status === 'transferred' ? 'bg-amber-600' :
+                            'bg-emerald-600'
+                          }`}></span>
+                          <span>
+                            {s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}
+                          </span>
+                        </span>
+                      </td>
+                      <td className="p-2.5 text-center" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-center gap-1">
+                          <button 
+                            onClick={() => { setSelectedId(s.id); setView('detail'); }} 
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                            title="عرض التفاصيل"
+                          >
+                            <Eye size={15} />
+                          </button>
+                          <button 
+                            onClick={() => { setSelectedId(s.id); setView('edit'); setSimilarStudents([]); }} 
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                            title="تعديل الطالب"
+                          >
+                            <Edit2 size={15} />
+                          </button>
+                          <button 
+                            onClick={() => { setSelectedId(s.id); setPrintMode('single'); setTimeout(() => window.print(), 500); }} 
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                            title="طباعة بطاقة الطالب"
+                          >
+                            <Printer size={15} />
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(s.id)} 
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                            title="حذف"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        /* Modern Grid Cards View */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {displayed.map((s) => {
+            const isSelected = selectedStudents.includes(s.id);
+            const firstLetter = cleanName(s.firstName).charAt(0) || 'ط';
+            return (
+              <div 
+                key={s.id}
+                onClick={() => { setSelectedId(s.id); setView('detail'); }}
+                className={`glass-panel modern-card-hover rounded-2xl p-4 border transition-all cursor-pointer relative group ${
+                  isSelected 
+                    ? 'border-blue-400 ring-2 ring-blue-400/20 bg-blue-50/20' 
+                    : 'border-slate-200/90 dark:border-slate-800'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3 mb-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-sm">
+                      {firstLetter}
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-black text-slate-800 dark:text-slate-100 text-sm group-hover:text-blue-600 truncate transition-colors">
+                        {cleanName(s.firstName)}
+                      </h3>
+                      {s.lastName && (
+                        <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 truncate">
+                          اللقب: {s.lastName}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                    <input 
+                      type="checkbox" 
+                      checked={isSelected}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedStudents([...selectedStudents, s.id]);
+                        else setSelectedStudents(selectedStudents.filter(id => id !== s.id));
+                      }}
+                      className="rounded border-slate-300 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Chips: Page first, then Reg, and Status */}
+                <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                  <span className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 px-2.5 py-1 rounded-xl text-xs font-bold font-mono">
+                    صفحة {s.pageNumber}
+                  </span>
+                  <span className={`${currentTheme.primary} text-white px-2.5 py-1 rounded-xl text-xs font-bold font-mono`}>
+                    قيد {s.regNumber}
+                  </span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full mr-auto ${
+                    s.status === 'graduated' ? 'bg-blue-100 text-blue-800' :
+                    s.status === 'left' ? 'bg-rose-100 text-rose-800' :
+                    s.status === 'transferred' ? 'bg-amber-100 text-amber-800' :
+                    'bg-emerald-100 text-emerald-800'
+                  }`}>
+                    {s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}
+                  </span>
+                </div>
+
+                {/* Transferred summary if applicable */}
+                {s.status === 'transferred' && (s.docDestination || s.transferGrade) && (
+                  <div className="bg-amber-50/70 dark:bg-amber-950/30 p-2 rounded-xl text-[11px] text-amber-900 dark:text-amber-300 font-semibold mb-3 border border-amber-200/60 dark:border-amber-900/60">
+                    {s.docDestination && <div>الجهة: {s.docDestination}</div>}
+                    {s.transferGrade && <div>الصف: {s.transferGrade}</div>}
+                  </div>
+                )}
+
+                {/* Bottom Card Actions */}
+                <div className="flex items-center justify-end gap-1 pt-2 border-t border-slate-100 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+                  <button 
+                    onClick={() => { setSelectedId(s.id); setView('detail'); }} 
+                    className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 hover:text-blue-600 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 transition-colors flex items-center gap-1 cursor-pointer"
+                  >
+                    <Eye size={13} /> عرض
+                  </button>
+                  <button 
+                    onClick={() => { setSelectedId(s.id); setView('edit'); setSimilarStudents([]); }} 
+                    className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-amber-50 hover:text-amber-600 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 transition-colors flex items-center gap-1 cursor-pointer"
+                  >
+                    <Edit2 size={13} /> تعديل
+                  </button>
+                  <button 
+                    onClick={() => { setSelectedId(s.id); setPrintMode('single'); setTimeout(() => window.print(), 500); }} 
+                    className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                    title="طباعة بطاقة الطالب"
+                  >
+                    <Printer size={14} />
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(s.id)} 
+                    className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-red-50 hover:text-red-600 rounded-lg text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                    title="حذف"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Empty State */}
+      {filtered.length === 0 && (
+        <div className="glass-panel text-center py-12 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs animate-fade-in">
+          <div className="w-14 h-14 bg-blue-50 dark:bg-slate-800 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-xs">
+            <Search size={26} />
+          </div>
+          <div className="font-black text-slate-800 dark:text-slate-100 text-base">لا توجد نتائج مطابقة للبحث أو الفلاتر</div>
+          <div className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+            تأكد من كتابة الاسم بشكل صحيح أو أعد ضبط الفلاتر الحالية لعرض جميع الطلاب.
+          </div>
+          <button 
+            onClick={() => {
+              setSearch('');
+              setSelectedRegFilter('');
+              setStatusFilter('ALL');
+              setYearFilter('ALL');
+              setIsSearchActive(false);
+            }}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm cursor-pointer"
+          >
+            عرض جميع الطلاب
+          </button>
+        </div>
+      )}
+
+      {/* Floating Selection Dock */}
+      {selectedStudents.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 glass-panel shadow-2xl rounded-2xl px-4 py-2.5 border border-blue-300 dark:border-blue-700 flex items-center gap-2.5 animate-slide-up bg-white/95 dark:bg-slate-900/95">
+          <span className="text-xs font-black text-blue-800 dark:text-blue-300 px-2">
+            {selectedStudents.length} محدد
+          </span>
+          <button 
+            onClick={() => setShowPrintSelectedModal(true)}
+            className="px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 hover:bg-blue-700 shadow-xs cursor-pointer"
+          >
+            <Printer size={14} /> طباعة
+          </button>
+          <button 
+            onClick={() => shareViaWhatsApp(students.filter(s => selectedStudents.includes(s.id)))}
+            className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 hover:bg-emerald-700 shadow-xs cursor-pointer"
+          >
+            <Share2 size={14} /> مشاركة
+          </button>
+          <button 
+            onClick={handleBulkDelete}
+            className="px-3 py-1.5 bg-red-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 hover:bg-red-700 shadow-xs cursor-pointer"
+          >
+            <Trash2 size={14} /> حذف
+          </button>
+          <button 
+            onClick={() => setSelectedStudents([])}
+            className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg transition-colors cursor-pointer"
+            title="إلغاء التحديد"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -976,6 +1726,10 @@ export default function App() {
   const [colorTheme, setColorTheme] = useState(localStorage.getItem('appTheme') || 'slate');
   const [isDarkMode, setIsDarkMode] = useState(localStorage.getItem('darkMode') === 'true');
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [uiDesignMode, setUiDesignMode] = useState<'modern' | 'classic'>(() => {
+    return (localStorage.getItem('uiDesignMode') as 'modern' | 'classic') || 'modern';
+  });
+  const [modernViewType, setModernViewType] = useState<'table' | 'grid'>('table');
   
   // Enhanced features
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -1414,6 +2168,20 @@ export default function App() {
     } catch(e) { console.error(e); }
   };
 
+  const handleDelete = (id: string) => {
+    setConfirmConfig({
+      title: "حذف طالب",
+      message: "هل تريد نقل هذا الطالب إلى سلة المحذوفات؟",
+      isDestructive: true,
+      onConfirm: async () => {
+        await updateDoc(doc(db, "students", id), { isDeleted: true });
+        await refreshStats();
+        setConfirmConfig(null);
+        setAlertConfig({ message: 'تم نقل الطالب إلى سلة المحذوفات', type: 'success' });
+      }
+    });
+  };
+
   const handleBulkDelete = async () => {
     if (selectedStudents.length === 0) {
       setAlertConfig({ message: 'الرجاء تحديد طلاب للحذف أولاً', type: 'warning' });
@@ -1607,44 +2375,89 @@ export default function App() {
           </div>
         )}
 
-        <header className="bg-white border-b sticky top-0 z-40 shadow-sm backdrop-blur-md bg-white/80">
-          <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
-            <div className="flex items-center gap-2 font-bold text-base text-slate-800 cursor-pointer" onClick={() => setView('list')}>
-              <div className={`${currentTheme.primary} text-white p-1.5 rounded-lg shadow-lg transition-colors`}><Users size={18} /></div>
-              <span>سجل القيد العام</span>
+        <header className="bg-white/90 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-40 shadow-xs backdrop-blur-md">
+          <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-3 cursor-pointer select-none" onClick={() => setView('list')}>
+              <div className={`${currentTheme.primary} text-white p-2 rounded-xl shadow-md transition-all flex items-center justify-center`}>
+                <School size={20} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="font-black text-base sm:text-lg text-slate-800 dark:text-slate-100 font-cairo leading-none">
+                    سجل القيد العام
+                  </h1>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 hidden sm:inline-block">
+                    {students.filter(s => !s.isDeleted).length} طالب
+                  </span>
+                </div>
+                <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
+                  ثانوية الشهيد محمد عبدالعزيز الكنعان للبنين
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
+
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {/* زر التبديل بين التصميم الحديث والتصميم الكلاسيكي */}
+              <button 
+                onClick={() => {
+                  const nextMode = uiDesignMode === 'modern' ? 'classic' : 'modern';
+                  setUiDesignMode(nextMode);
+                  localStorage.setItem('uiDesignMode', nextMode);
+                }} 
+                data-tooltip={uiDesignMode === 'modern' ? 'التبديل إلى التصميم الكلاسيكي' : 'التبديل إلى التصميم الحديث ✨'}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
+                  uiDesignMode === 'modern' 
+                    ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-blue-500/25 ring-2 ring-blue-400/30 hover:brightness-110' 
+                    : 'bg-amber-100 text-amber-950 border border-amber-300 hover:bg-amber-200'
+                }`}
+                type="button"
+              >
+                {uiDesignMode === 'modern' ? (
+                  <>
+                    <Sparkles size={14} className="text-amber-300 animate-spin" style={{ animationDuration: '4s' }} />
+                    <span className="hidden xs:inline">التصميم الحديث</span>
+                    <span className="text-[10px] bg-white/20 px-1 py-0.5 rounded font-mono">✨</span>
+                  </>
+                ) : (
+                  <>
+                    <LayoutTemplate size={14} className="text-amber-800" />
+                    <span className="hidden xs:inline">التصميم الكلاسيكي</span>
+                    <span className="text-[10px] bg-amber-200/80 px-1 py-0.5 rounded text-amber-900 font-bold">🏛️</span>
+                  </>
+                )}
+              </button>
+
               <button 
                 onClick={toggleFullscreen} 
                 data-tooltip={isFullscreen ? 'خروج من ملء الشاشة' : 'وضع ملء الشاشة'}
-                className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors"
+                className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
                 type="button"
               >
-                {isFullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+                {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
               </button>
               <button 
                 onClick={() => setShowThemeModal(true)} 
                 data-tooltip="تغيير ألوان التطبيق"
-                className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors"
+                className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
                 type="button"
               >
-                <Palette size={20} />
+                <Palette size={18} />
               </button>
               <button 
                 onClick={() => setView('settings')} 
                 data-tooltip="الإعدادات"
-                className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors"
+                className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
                 type="button"
               >
-                <Settings size={20} />
+                <Settings size={18} />
               </button>
               <button 
                 onClick={() => setConfirmConfig({ title: "تسجيل خروج", message: "هل أنت متأكد من تسجيل الخروج؟", onConfirm: () => signOut(auth) })} 
                 data-tooltip="تسجيل الخروج"
-                className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition-colors"
                 type="button"
               >
-                <LogOut size={20} />
+                <LogOut size={18} />
               </button>
             </div>
           </div>
@@ -1654,16 +2467,109 @@ export default function App() {
             {loading && students.length === 0 ? <SkeletonLoader /> : (
                 <div className="animate-fade-in space-y-4">
                   {view === 'trash' && (
-                    <div className="flex items-center justify-between bg-red-50 p-3 rounded-xl border border-red-100 animate-slide-up">
-                        <div className="flex items-center gap-2 text-red-700 font-bold text-sm">
-                            <Trash2 size={20} />
-                            <span>سلة المحذوفات</span>
+                    <div className="space-y-4 animate-slide-up">
+                      <div className="flex items-center justify-between bg-red-50 p-4 rounded-2xl border border-red-200 shadow-xs">
+                          <div className="flex items-center gap-2 text-red-700 font-bold text-sm">
+                              <Trash2 size={20} />
+                              <span>سلة المحذوفات ({filtered.length} سجل محذوف)</span>
+                          </div>
+                          <button onClick={() => setView('list')} className="flex items-center gap-2 bg-white text-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm hover:bg-slate-50 transition-colors"><ArrowLeft size={16}/> العودة إلى الرئيسية</button>
+                      </div>
+
+                      {filtered.length === 0 ? (
+                        <div className="text-center py-12 bg-white rounded-2xl border border-slate-100 p-6 shadow-xs">
+                          <div className="w-12 h-12 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-3">
+                            <Trash2 size={22} />
+                          </div>
+                          <div className="font-bold text-slate-700 text-sm">سلة المحذوفات فارغة</div>
+                          <div className="text-xs text-slate-400 mt-1">لا توجد سجلات محذوفة حالياً</div>
                         </div>
-                        <button onClick={() => setView('list')} className="flex items-center gap-2 bg-white text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm hover:bg-slate-50 transition-colors"><ArrowLeft size={16}/> العودة إلى الرئيسية</button>
+                      ) : (
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                          <table className="w-full text-right border-collapse">
+                            <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 text-[11px] font-bold">
+                              <tr>
+                                <th className="px-4 py-2.5 w-12 text-center">#</th>
+                                <th className="px-4 py-2.5">اسم الطالب</th>
+                                <th className="px-4 py-2.5 w-24 text-center">الصفحة</th>
+                                <th className="px-4 py-2.5 w-28 text-center">رقم القيد</th>
+                                <th className="px-4 py-2.5 w-36 text-center">الإجراءات</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 text-xs">
+                              {filtered.map((s, idx) => (
+                                <tr key={s.id} className="hover:bg-red-50/30 transition-all border-b border-slate-50 h-11">
+                                  <td className="px-4 py-2 text-center text-slate-400 font-mono">{idx + 1}</td>
+                                  <td className="px-4 py-2 font-bold text-slate-800">
+                                    {cleanName(s.firstName)}{s.lastName ? ` / ${s.lastName}` : ''}
+                                  </td>
+                                  <td className="px-4 py-2 text-center"><span className="bg-[#FFA500] text-white px-2 py-0.5 rounded-md font-mono text-[10px]">{s.pageNumber}</span></td>
+                                  <td className="px-4 py-2 text-center"><span className={`${currentTheme.primary} text-white px-2 py-0.5 rounded-md font-mono text-[10px]`}>{s.regNumber}</span></td>
+                                  <td className="px-4 py-2 text-center">
+                                    <div className="flex gap-1.5 justify-center">
+                                      <button onClick={() => handleRestore(s.id)} className="px-2.5 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors" title="استعادة"><RotateCcw size={13}/> استعادة</button>
+                                      <button onClick={() => handleDeleteForever(s.id)} className="px-2.5 py-1 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors" title="حذف نهائي"><Trash2 size={13}/> حذف نهائي</button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {view !== 'trash' && (
+                    uiDesignMode === 'modern' ? (
+                      <ModernAppLayout
+                        students={students}
+                        filtered={filtered}
+                        displayed={displayed}
+                        selectedStudents={selectedStudents}
+                        setSelectedStudents={setSelectedStudents}
+                        search={search}
+                        setSearch={setSearch}
+                        searchInputRef={searchInputRef}
+                        isListening={isListening}
+                        startVoiceSearch={startVoiceSearch}
+                        inSearchMode={inSearchMode}
+                        setIsSearchActive={setIsSearchActive}
+                        showSearchFilters={showSearchFilters}
+                        setShowSearchFilters={setShowSearchFilters}
+                        selectedRegFilter={selectedRegFilter}
+                        setSelectedRegFilter={setSelectedRegFilter}
+                        statusFilter={statusFilter}
+                        setStatusFilter={setStatusFilter}
+                        sortBy={sortBy}
+                        setSortBy={setSortBy}
+                        yearFilter={yearFilter}
+                        setYearFilter={setYearFilter}
+                        years={years}
+                        regsCount={regsCount}
+                        alphabetLetters={alphabetLetters}
+                        studentsByLetter={studentsByLetter}
+                        currentTheme={currentTheme}
+                        setSelectedId={setSelectedId}
+                        setView={setView}
+                        setSimilarStudents={setSimilarStudents}
+                        setPrintMode={setPrintMode}
+                        setShowPrintModal={setShowPrintModal}
+                        setShowPrintTemplateModal={setShowPrintTemplateModal}
+                        setShowPrintSelectedModal={setShowPrintSelectedModal}
+                        handleDelete={handleDelete}
+                        handleRestore={handleRestore}
+                        handleDeleteForever={handleDeleteForever}
+                        handleBulkDelete={handleBulkDelete}
+                        shareViaWhatsApp={shareViaWhatsApp}
+                        cleanName={cleanName}
+                        modernViewType={modernViewType}
+                        setModernViewType={setModernViewType}
+                        view={view}
+                        debouncedQuery={debouncedQuery}
+                      />
+                    ) : (
+                      <>
                     <div className={`${inSearchMode ? 'hidden' : 'grid'} grid-cols-2 lg:grid-cols-3 gap-3`}>
                         <StatCard 
                           title="إجمالي الطلاب" 
@@ -1688,9 +2594,8 @@ export default function App() {
                           tooltip="عدد الطلاب المحددين للمشاركة"
                         />
                     </div>
-                  )}
 
-                  {/* Search Bar with Clear (X) Button, Voice, and Filters Toggle */}
+                    {/* Search Bar with Clear (X) Button, Voice, and Filters Toggle */}
                   <div className="bg-slate-50 p-1.5 rounded-xl border border-slate-200 transition-all mb-3">
                      <div className={`relative flex items-center bg-white rounded-lg border border-slate-200 px-3 py-1 focus-within:ring-2 ${currentTheme.ring} transition-all`}>
                          <Search className="text-slate-400 ml-1 shrink-0" size={16} />
@@ -1955,15 +2860,14 @@ export default function App() {
                                 <th className="px-4 py-2 w-24 text-center">الصفحة</th>
                                 <th className="px-4 py-2 w-28 text-center">رقم القيد</th>
                                 <th className="px-4 py-2 w-20 text-center">الحالة</th>
-                                {view === 'trash' && <th className="px-4 py-2 w-32 text-center">إجراءات</th>}
                                  </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 text-xs">
                               {studentsByLetter[letter].map((s, idx) => (
-                                <tr key={s.id} className={`hover:bg-blue-50/40 transition-all border-b border-slate-50 group h-10 ${view === 'trash' ? 'cursor-default' : ''}`}>
+                                <tr key={s.id} className="hover:bg-blue-50/40 transition-all border-b border-slate-50 group h-10">
                                   <td className="px-2 py-2 text-center">
                                     <input 
-                                      type="checkbox"
+                                      type="checkbox" 
                                       checked={selectedStudents.includes(s.id)}
                                       onChange={(e) => {
                                         e.stopPropagation();
@@ -1981,7 +2885,7 @@ export default function App() {
                                   <td className="px-4 py-2">
                                       <div 
                                         className="flex items-center gap-2 cursor-pointer" 
-                                        onClick={() => { if(view !== 'trash') { setSelectedId(s.id); setView('detail'); }}}
+                                        onClick={() => { setSelectedId(s.id); setView('detail'); }}
                                       >
                                           <div className={`w-2 h-2 rounded-full shrink-0 ${s.status === 'graduated' ? 'bg-blue-500' : s.status === 'left' ? 'bg-rose-500' : s.status === 'transferred' ? 'bg-amber-500' : 'bg-emerald-500'}`} title={s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}></div>
                                           <span className="font-bold text-slate-800 text-sm group-hover:text-blue-700 transition-colors">
@@ -2002,12 +2906,6 @@ export default function App() {
                                       {s.status === 'graduated' ? 'خ' : s.status === 'left' ? 'ت' : s.status === 'transferred' ? 'ن' : 'م'}
                                     </span>
                                   </td>
-                                  {view === 'trash' && (
-                                    <td className="px-4 py-2 text-center flex gap-1 justify-center">
-                                         <button onClick={(e) => { e.stopPropagation(); handleRestore(s.id); }} className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200" title="استعادة"><RotateCcw size={14}/></button>
-                                         <button onClick={(e) => { e.stopPropagation(); handleDeleteForever(s.id); }} className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200" title="حذف نهائي"><Trash2 size={14}/></button>
-                                    </td>
-                                  )}
                                  </tr>
                               ))}
                             </tbody>
@@ -2038,15 +2936,14 @@ export default function App() {
                             <th className="px-4 py-2 w-24 text-center">الصفحة</th>
                             <th className="px-4 py-2 w-28 text-center">رقم القيد</th>
                             <th className="px-4 py-2 w-20 text-center">الحالة</th>
-                            {view === 'trash' && <th className="px-4 py-2 w-32 text-center">إجراءات</th>}
                              </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-xs">
                           {displayed.map((s, idx) => (
-                            <tr key={s.id} className={`hover:bg-blue-50/40 transition-all border-b border-slate-50 group h-10 ${view === 'trash' ? 'cursor-default' : ''}`}>
+                            <tr key={s.id} className="hover:bg-blue-50/40 transition-all border-b border-slate-50 group h-10">
                               <td className="px-2 py-2 text-center">
                                 <input 
-                                  type="checkbox"
+                                  type="checkbox" 
                                   checked={selectedStudents.includes(s.id)}
                                   onChange={(e) => {
                                     e.stopPropagation();
@@ -2064,7 +2961,7 @@ export default function App() {
                               <td className="px-4 py-2">
                                   <div 
                                     className="flex items-center gap-2 cursor-pointer" 
-                                    onClick={() => { if(view !== 'trash') { setSelectedId(s.id); setView('detail'); }}}
+                                    onClick={() => { setSelectedId(s.id); setView('detail'); }}
                                   >
                                       <div className={`w-2 h-2 rounded-full shrink-0 ${s.status === 'graduated' ? 'bg-blue-500' : s.status === 'left' ? 'bg-rose-500' : s.status === 'transferred' ? 'bg-amber-500' : 'bg-emerald-500'}`} title={s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}></div>
                                       <span className="font-bold text-slate-800 text-sm group-hover:text-blue-700 transition-colors">
@@ -2085,12 +2982,6 @@ export default function App() {
                                   {s.status === 'graduated' ? 'خ' : s.status === 'left' ? 'ت' : s.status === 'transferred' ? 'ن' : 'م'}
                                 </span>
                               </td>
-                              {view === 'trash' && (
-                                  <td className="px-4 py-2 text-center flex gap-1 justify-center">
-                                       <button onClick={(e) => { e.stopPropagation(); handleRestore(s.id); }} className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200" title="استعادة"><RotateCcw size={14}/></button>
-                                       <button onClick={(e) => { e.stopPropagation(); handleDeleteForever(s.id); }} className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200" title="حذف نهائي"><Trash2 size={14}/></button>
-                                  </td>
-                              )}
                              </tr>
                           ))}
                         </tbody>
@@ -2127,8 +3018,8 @@ export default function App() {
                                 />
                               </div>
                               <div 
-                                className={`${view === 'trash' ? 'cursor-default' : 'cursor-pointer'}`}
-                                onClick={() => { if(view !== 'trash') { setSelectedId(s.id); setView('detail'); }}}
+                                className="cursor-pointer"
+                                onClick={() => { setSelectedId(s.id); setView('detail'); }}
                               >
                                 <div className={`absolute top-0 bottom-0 left-0 w-1 ${s.status === 'graduated' ? 'bg-blue-500' : s.status === 'left' ? 'bg-rose-500' : s.status === 'transferred' ? 'bg-amber-500' : 'bg-emerald-500'}`}></div>
                                 <div className="flex items-start gap-2 mr-8">
@@ -2156,12 +3047,6 @@ export default function App() {
                                       {s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}
                                     </span>
                                 </div>
-                                {view === 'trash' && (
-                                  <div className="mt-2 pt-2 border-t border-slate-100 flex gap-2 mr-8">
-                                       <button onClick={(e) => { e.stopPropagation(); handleRestore(s.id); }} className="flex-1 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg font-bold text-xs flex items-center justify-center gap-1"><RotateCcw size={14}/> استعادة</button>
-                                       <button onClick={(e) => { e.stopPropagation(); handleDeleteForever(s.id); }} className="flex-1 py-1.5 bg-red-50 text-red-600 rounded-lg font-bold text-xs flex items-center justify-center gap-1"><Trash2 size={14}/> حذف نهائي</button>
-                                  </div>
-                                )}
                               </div>
                             </div>
                           ))}
@@ -2186,8 +3071,8 @@ export default function App() {
                             />
                           </div>
                           <div 
-                            className={`${view === 'trash' ? 'cursor-default' : 'cursor-pointer'}`}
-                            onClick={() => { if(view !== 'trash') { setSelectedId(s.id); setView('detail'); }}}
+                            className="cursor-pointer"
+                            onClick={() => { setSelectedId(s.id); setView('detail'); }}
                           >
                             <div className={`absolute top-0 bottom-0 left-0 w-1 ${s.status === 'graduated' ? 'bg-blue-500' : s.status === 'left' ? 'bg-rose-500' : s.status === 'transferred' ? 'bg-amber-500' : 'bg-emerald-500'}`}></div>
                             <div className="flex items-start gap-2 mr-8">
@@ -2215,12 +3100,6 @@ export default function App() {
                                   {s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}
                                 </span>
                             </div>
-                            {view === 'trash' && (
-                              <div className="mt-2 pt-2 border-t border-slate-100 flex gap-2 mr-8">
-                                   <button onClick={(e) => { e.stopPropagation(); handleRestore(s.id); }} className="flex-1 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg font-bold text-xs flex items-center justify-center gap-1"><RotateCcw size={14}/> استعادة</button>
-                                   <button onClick={(e) => { e.stopPropagation(); handleDeleteForever(s.id); }} className="flex-1 py-1.5 bg-red-50 text-red-600 rounded-lg font-bold text-xs flex items-center justify-center gap-1"><Trash2 size={14}/> حذف نهائي</button>
-                              </div>
-                            )}
                           </div>
                         </div>
                       ))
@@ -2235,6 +3114,9 @@ export default function App() {
                       </div>
                     )}
                   </div>
+                      </>
+                    )
+                  )}
                   <div ref={loadMoreRef} className="h-10"></div>
                 </div>
             )}

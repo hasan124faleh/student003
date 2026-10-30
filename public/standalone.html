@@ -754,19 +754,16 @@
                   }
                   .general-print-page {
                     width: ${isPortrait ? '200mm' : '287mm'} !important;
-                    height: ${isPortrait ? '282mm' : '196mm'} !important;
-                    max-height: ${isPortrait ? '282mm' : '196mm'} !important;
+                    max-width: ${isPortrait ? '200mm' : '287mm'} !important;
                     box-sizing: border-box !important;
                     page-break-after: always !important;
                     break-after: page !important;
                     page-break-inside: avoid !important;
                     break-inside: avoid !important;
-                    display: flex !important;
-                    flex-direction: column !important;
-                    justify-content: flex-start !important;
-                    padding: 2mm 3mm !important;
+                    display: block !important;
+                    padding: 1.5mm 2.5mm !important;
                     background: white !important;
-                    overflow: hidden !important;
+                    overflow: visible !important;
                   }
                   .general-print-page:last-child {
                     page-break-after: auto !important;
@@ -798,7 +795,7 @@
                     print-color-adjust: exact !important;
                   }
                   .general-table td {
-                    height: ${isPortrait ? '7.7mm' : '7.5mm'} !important;
+                    height: ${isPortrait ? '7.4mm' : '7.3mm'} !important;
                     line-height: 1.15 !important;
                     padding: 0 3px !important;
                   }
@@ -858,7 +855,7 @@
                                 };
 
                                 return (
-                                  <tr key={rowIndex} style={{ height: isPortrait ? '7.7mm' : '7.5mm' }}>
+                                  <tr key={rowIndex} style={{ height: isPortrait ? '7.4mm' : '7.3mm' }}>
                                     <td className="text-center font-bold font-mono text-[8pt]">
                                       {s ? s.printIndex : ''}
                                     </td>
