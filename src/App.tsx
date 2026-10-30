@@ -570,7 +570,7 @@ const DocsExportPrint = ({
             word-wrap: normal !important;
             overflow-wrap: normal !important;
             overflow: hidden !important;
-            text-overflow: ellipsis !important;
+            text-overflow: clip !important;
           }
           .docs-table th {
             background-color: #f1f5f9 !important;
@@ -582,7 +582,7 @@ const DocsExportPrint = ({
             print-color-adjust: exact !important;
           }
           .docs-table td {
-            font-size: ${isPortrait ? '7.8pt' : '8.2pt'} !important;
+            font-size: ${isPortrait ? '7.5pt' : '8.0pt'} !important;
             height: ${isPortrait ? '8.2mm' : '5.75mm'} !important;
             line-height: 1.15 !important;
             padding: 0 3px !important;
@@ -597,38 +597,13 @@ const DocsExportPrint = ({
       {pages.map((pageRows, pageIdx) => (
         <div key={pageIdx} className="docs-print-page">
           <div className="flex-1 flex flex-col justify-start">
-            {/* Official Header */}
-            <div className="flex justify-between items-center border-b-2 border-slate-900 pb-1 mb-1 w-full">
-              {/* Right: Only Directorate and Department */}
-              <div className="text-right text-[8.5pt] font-bold leading-tight text-slate-800 w-[27%] flex-shrink-0">
-                <div>جمهورية العراق</div>
-                <div>وزارة التربية</div>
-                <div>المديرية العامة لتربية البصرة</div>
-                <div>قسم تربية أبي الخصيب</div>
+            {/* Minimal Official Header: Only Title and School Name as requested */}
+            <div className="text-center border-b-2 border-slate-900 pb-1 mb-1 w-full">
+              <div className="text-xl font-black text-slate-900 tracking-wide font-cairo leading-snug">
+                سجل صادر الوثائق
               </div>
-
-              {/* Center: Title + School Name + Years without word الدراسية */}
-              <div className="text-center flex-1 px-2 min-w-0">
-                <div className="text-xl font-black text-slate-900 tracking-wide font-cairo">
-                  سجل صادر الوثائق
-                </div>
-                <div className="text-sm font-bold text-slate-800 mt-0.5">
-                  ث. ش. محمد عبدالعزيز الكنعان للبنين
-                </div>
-                <div className="flex items-center justify-center gap-2 mt-1">
-                  <span className="text-[8.5pt] font-bold text-slate-700 bg-slate-100 inline-block px-3 py-0.5 rounded-full border border-slate-300 whitespace-nowrap">
-                    {selectedYear === 'ALL' ? 'جميع السنوات' : `للسنة: ${selectedYear}`}
-                  </span>
-                  <span className="text-[8pt] font-bold text-slate-600 bg-amber-50 text-amber-900 border border-amber-200 px-2.5 py-0.5 rounded-full whitespace-nowrap">
-                    {sortBy === 'byDate' ? 'الترتيب: حسب تاريخ الوثيقة' : sortBy === 'alphabetical' ? 'الترتيب: حسب الأبجدية' : 'الترتيب: أبجدياً حسب الصف'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Left: Date + Total count */}
-              <div className="text-left text-[8.5pt] font-bold leading-tight text-slate-800 w-[27%] flex-shrink-0">
-                <div>تاريخ الطباعة: {printDate}</div>
-                <div>إجمالي الوثائق: {totalItems}</div>
+              <div className="text-sm font-bold text-slate-800 mt-0.5">
+                ث. ش. محمد عبدالعزيز الكنعان للبنين
               </div>
             </div>
 
@@ -636,12 +611,12 @@ const DocsExportPrint = ({
             <table className="docs-table w-full">
               <thead>
                 <tr className="bg-slate-100 text-center">
-                  <th style={{ width: '3.5%' }} className="text-center font-bold">ت</th>
-                  <th style={{ width: '9.5%' }} className="text-center font-bold">تاريخ الوثيقة</th>
-                  <th style={{ width: '28%' }} className="text-right font-bold pr-2">اسم الطالب الرباعي</th>
-                  <th style={{ width: '23%' }} className="text-right font-bold pr-2">الجهة الصادر إليها</th>
-                  <th style={{ width: '12%' }} className="text-center font-bold">الغرض من الوثيقة</th>
-                  <th style={{ width: '13%' }} className="text-center font-bold">الصف الذي انتقل فيه</th>
+                  <th style={{ width: '4%' }} className="text-center font-bold">ت</th>
+                  <th style={{ width: '10%' }} className="text-center font-bold">تاريخ الوثيقة</th>
+                  <th style={{ width: '28.5%' }} className="text-right font-bold pr-2">اسم الطالب الرباعي</th>
+                  <th style={{ width: '24%' }} className="text-right font-bold pr-2">الجهة الصادر إليها</th>
+                  <th style={{ width: '11%' }} className="text-center font-bold">الغرض من الوثيقة</th>
+                  <th style={{ width: '11.5%' }} className="text-center font-bold">الصف الذي انتقل فيه</th>
                   <th style={{ width: '11%' }} className="text-center font-bold">الملاحظات</th>
                 </tr>
               </thead>
@@ -649,41 +624,61 @@ const DocsExportPrint = ({
                 {Array.from({ length: ROWS_PER_PAGE }).map((_, rIdx) => {
                   const s = pageRows[rIdx];
                   const serial = pageIdx * ROWS_PER_PAGE + rIdx + 1;
-                  const studentFullName = s ? `${cleanName(s.firstName)} ${s.lastName || ''}`.trim() : '';
+                  // Quadruple name without family title/nickname as requested
+                  const studentFullName = s ? cleanName(s.firstName) : '';
                   const destination = s?.docDestination || '';
                   const purpose = s?.docPurpose || '';
+                  const transferGrade = s?.transferGrade || '';
 
-                  // Dynamic font scaling for long names, destinations and purposes
+                  // Dynamic font scaling for full visibility without ellipsis
                   const getNameStyle = (name: string) => {
                     const len = name.length;
-                    const base = isPortrait ? 7.8 : 8.2;
-                    if (len <= 22) return { fontSize: `${base}pt`, letterSpacing: 'normal' };
-                    if (len <= 28) return { fontSize: `${(base * 0.88).toFixed(2)}pt`, letterSpacing: '-0.2px' };
-                    if (len <= 35) return { fontSize: `${(base * 0.77).toFixed(2)}pt`, letterSpacing: '-0.35px' };
-                    return { fontSize: `${(base * 0.67).toFixed(2)}pt`, letterSpacing: '-0.5px' };
+                    if (isPortrait) {
+                      if (len <= 18) return { fontSize: '7.4pt', letterSpacing: 'normal' };
+                      if (len <= 23) return { fontSize: '6.7pt', letterSpacing: '-0.2px' };
+                      if (len <= 28) return { fontSize: '6.0pt', letterSpacing: '-0.3px' };
+                      return { fontSize: '5.4pt', letterSpacing: '-0.4px' };
+                    } else {
+                      if (len <= 20) return { fontSize: '8.2pt', letterSpacing: 'normal' };
+                      if (len <= 26) return { fontSize: '7.5pt', letterSpacing: '-0.15px' };
+                      if (len <= 32) return { fontSize: '6.8pt', letterSpacing: '-0.25px' };
+                      return { fontSize: '6.2pt', letterSpacing: '-0.35px' };
+                    }
                   };
 
                   const getDestStyle = (dest: string) => {
                     const len = dest.length;
-                    const base = isPortrait ? 7.8 : 8.2;
-                    if (len <= 20) return { fontSize: `${base}pt`, letterSpacing: 'normal' };
-                    if (len <= 28) return { fontSize: `${(base * 0.88).toFixed(2)}pt`, letterSpacing: '-0.2px' };
-                    if (len <= 36) return { fontSize: `${(base * 0.77).toFixed(2)}pt`, letterSpacing: '-0.35px' };
-                    return { fontSize: `${(base * 0.67).toFixed(2)}pt`, letterSpacing: '-0.5px' };
+                    if (isPortrait) {
+                      if (len <= 18) return { fontSize: '7.2pt', letterSpacing: 'normal' };
+                      if (len <= 24) return { fontSize: '6.4pt', letterSpacing: '-0.2px' };
+                      if (len <= 30) return { fontSize: '5.8pt', letterSpacing: '-0.3px' };
+                      return { fontSize: '5.2pt', letterSpacing: '-0.4px' };
+                    } else {
+                      if (len <= 20) return { fontSize: '8.0pt', letterSpacing: 'normal' };
+                      if (len <= 27) return { fontSize: '7.3pt', letterSpacing: '-0.15px' };
+                      if (len <= 34) return { fontSize: '6.6pt', letterSpacing: '-0.25px' };
+                      return { fontSize: '6.0pt', letterSpacing: '-0.35px' };
+                    }
+                  };
+
+                  const getGradeStyle = (grade: string) => {
+                    const len = grade.length;
+                    const base = isPortrait ? 7.1 : 7.8;
+                    if (len <= 10) return { fontSize: `${base}pt`, letterSpacing: 'normal' };
+                    return { fontSize: `${(base * 0.86).toFixed(2)}pt`, letterSpacing: '-0.2px' };
                   };
 
                   const getPurposeStyle = (purp: string) => {
                     const len = purp.length;
-                    const base = isPortrait ? 7.6 : 8.0;
-                    if (len <= 16) return { fontSize: `${base}pt`, letterSpacing: 'normal' };
-                    if (len <= 24) return { fontSize: `${(base * 0.86).toFixed(2)}pt`, letterSpacing: '-0.2px' };
-                    return { fontSize: `${(base * 0.74).toFixed(2)}pt`, letterSpacing: '-0.3px' };
+                    const base = isPortrait ? 6.8 : 7.6;
+                    if (len <= 14) return { fontSize: `${base}pt`, letterSpacing: 'normal' };
+                    return { fontSize: `${(base * 0.85).toFixed(2)}pt`, letterSpacing: '-0.2px' };
                   };
 
                   return (
                     <tr key={rIdx} style={{ height: isPortrait ? '8.2mm' : '5.75mm' }}>
                       <td className="text-center font-bold font-mono">{s ? serial : ''}</td>
-                      <td className="text-center font-mono font-bold">{s ? (s.docDate || '—') : ''}</td>
+                      <td className="text-center font-mono font-bold whitespace-nowrap text-[7.2pt] sm:text-[7.8pt]">{s ? (s.docDate || '—') : ''}</td>
                       <td 
                         className="text-right font-bold whitespace-nowrap overflow-hidden pr-2"
                         style={getNameStyle(studentFullName)}
@@ -705,7 +700,13 @@ const DocsExportPrint = ({
                       >
                         {s ? (purpose || '—') : ''}
                       </td>
-                      <td className="text-center font-bold">{s ? (s.transferGrade || '—') : ''}</td>
+                      <td 
+                        className="text-center font-bold whitespace-nowrap overflow-hidden px-1"
+                        style={getGradeStyle(transferGrade)}
+                        title={transferGrade}
+                      >
+                        {s ? (transferGrade || '—') : ''}
+                      </td>
                       <td className="text-center"></td>
                     </tr>
                   );
@@ -714,8 +715,9 @@ const DocsExportPrint = ({
             </table>
           </div>
 
-          {/* Page Sequence Footer anchored on the SAME page */}
+          {/* Page Footer with Print Date, School Log Title, and Page Sequence */}
           <div className="docs-page-footer pt-1 border-t-2 border-slate-900 mt-0.5 flex justify-between items-center px-4 text-xs font-bold text-slate-700">
+            <div className="text-[8.5pt] font-bold text-slate-800">تاريخ الطباعة: {printDate}</div>
             <div className="text-[8.5pt] font-bold text-slate-800">سجل صادر الوثائق - ث. ش. محمد عبدالعزيز الكنعان للبنين</div>
             <div className="text-[9pt] font-black text-slate-900 bg-slate-100 px-3 py-0.5 rounded border border-slate-400 font-mono">
               صفحة {pageIdx + 1} من {totalPages}
