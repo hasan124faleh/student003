@@ -29,6 +29,18 @@ import {
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { 
+  ResponsiveContainer, 
+  PieChart, 
+  Pie, 
+  Cell, 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  Tooltip, 
+  Legend 
+} from 'recharts';
 
 // ==========================================
 // FIREBASE CONFIG
@@ -185,14 +197,14 @@ const SkeletonLoader = () => (
   </div>
 );
 
-const Modal = ({ children, onClose, zIndex = "z-50" }: { children: React.ReactNode; onClose: () => void; zIndex?: string }) => (
+const Modal = ({ children, onClose, zIndex = "z-50", maxWidth = "max-w-lg" }: { children: React.ReactNode; onClose: () => void; zIndex?: string; maxWidth?: string }) => (
   <div 
     className={`fixed inset-0 bg-slate-900/60 ${zIndex} flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm overflow-y-auto modal-overlay`} 
     onClick={onClose}
     style={{ left: 0, top: 0, right: 0, bottom: 0, width: '100%', minHeight: '100%' }}
   >
     <div 
-      className="w-full max-w-lg relative my-auto mx-auto" 
+      className={`w-full ${maxWidth} relative my-auto mx-auto`} 
       onClick={e => e.stopPropagation()}
     >
         <button 
@@ -995,6 +1007,8 @@ interface ModernAppLayoutProps {
   setModernViewType: (t: 'table' | 'grid') => void;
   view: string;
   debouncedQuery: string;
+  setVisibleCount?: React.Dispatch<React.SetStateAction<number>>;
+  onOpenQuickStatus: (student: Student) => void;
 }
 
 const ModernAppLayout = ({
@@ -1039,6 +1053,8 @@ const ModernAppLayout = ({
   modernViewType,
   setModernViewType,
   debouncedQuery,
+  setVisibleCount,
+  onOpenQuickStatus,
 }: ModernAppLayoutProps) => {
   const activeCount = useMemo(() => students.filter(s => !s.isDeleted && (s.status === 'active' || !s.status)).length, [students]);
   const transferredCount = useMemo(() => students.filter(s => !s.isDeleted && (s.status === 'transferred' || !!s.docDestination || !!s.docDate)).length, [students]);
@@ -1076,6 +1092,69 @@ const ModernAppLayout = ({
       document.body.removeChild(textArea);
     } catch {
       // ignore
+    }
+  };
+
+  const handleJumpToLetter = (letter: string) => {
+    const normLetter = letter.trim();
+    const alefs = ['أ', 'إ', 'آ', 'ا'];
+    const isAlef = alefs.includes(normLetter);
+
+    const targetIdx = filtered.findIndex(s => {
+      const firstChar = cleanName(s.firstName).trim().charAt(0);
+      if (!firstChar) return false;
+      if (firstChar === normLetter) return true;
+      if (isAlef && alefs.includes(firstChar)) return true;
+      return false;
+    });
+
+    if (targetIdx !== -1) {
+      if (setVisibleCount && targetIdx >= displayed.length) {
+        setVisibleCount(Math.max(displayed.length, targetIdx + 60));
+      }
+
+      const targetStudent = filtered[targetIdx];
+      const targetChar = cleanName(targetStudent.firstName).trim().charAt(0);
+
+      const doScroll = () => {
+        const isMobile = window.innerWidth < 768;
+        let el: HTMLElement | null = null;
+
+        if (modernViewType === 'grid') {
+          el = document.getElementById(`modern-grid-section-${targetChar}`) ||
+               document.getElementById(`modern-grid-section-${normLetter}`) ||
+               document.getElementById(`modern-grid-student-${targetStudent.id}`);
+        } else if (isMobile) {
+          el = document.getElementById(`modern-mobile-section-${targetChar}`) ||
+               document.getElementById(`modern-mobile-section-${normLetter}`) ||
+               document.getElementById(`modern-mobile-student-${targetStudent.id}`);
+        } else {
+          el = document.getElementById(`modern-section-${targetChar}`) ||
+               document.getElementById(`modern-section-${normLetter}`) ||
+               document.getElementById(`modern-desktop-student-${targetStudent.id}`);
+        }
+
+        if (!el) {
+          el = document.getElementById(`student-item-${targetStudent.id}`) ||
+               document.getElementById(`section-${targetChar}`) ||
+               document.getElementById(`mobile-section-${targetChar}`);
+        }
+
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          const offset = 120;
+          const top = rect.top + window.pageYOffset - offset;
+          window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+          return true;
+        }
+        return false;
+      };
+
+      setTimeout(() => {
+        if (!doScroll()) {
+          setTimeout(doScroll, 120);
+        }
+      }, 50);
     }
   };
 
@@ -1397,15 +1476,10 @@ const ModernAppLayout = ({
           {alphabetLetters.map(letter => (
             <button
               key={letter}
-              onClick={() => {
-                const offset = 120;
-                const el = document.getElementById(`section-${letter}`) || document.getElementById(`mobile-section-${letter}`);
-                if (el) {
-                  const top = el.getBoundingClientRect().top + window.pageYOffset - offset;
-                  window.scrollTo({ top, behavior: 'smooth' });
-                }
-              }}
-              className="w-7 h-7 shrink-0 rounded-lg text-xs font-black flex items-center justify-center bg-slate-100 hover:bg-blue-600 hover:text-white dark:bg-slate-800 dark:text-slate-200 transition-all cursor-pointer"
+              type="button"
+              onClick={() => handleJumpToLetter(letter)}
+              className="w-7 h-7 shrink-0 rounded-lg text-xs font-black flex items-center justify-center bg-slate-100 hover:bg-blue-600 hover:text-white dark:bg-slate-800 dark:text-slate-200 transition-all cursor-pointer active:scale-95 shadow-xs"
+              title={`الانتقال إلى حرف ${letter}`}
             >
               {letter}
             </button>
@@ -1436,91 +1510,143 @@ const ModernAppLayout = ({
             {displayed.map((s, idx) => {
               const isSelected = selectedStudents.includes(s.id);
               const firstLetter = cleanName(s.firstName).charAt(0) || 'ط';
+              const isFirstOfLetter = sortBy === 'alphabetical' && !debouncedQuery && (
+                idx === 0 || cleanName(displayed[idx - 1].firstName).charAt(0) !== firstLetter
+              );
               return (
-                <div 
-                  key={s.id}
-                  onClick={() => { setSelectedId(s.id); setView('detail'); }}
-                  className={`p-3 transition-colors cursor-pointer active:bg-blue-50/50 dark:active:bg-slate-800/50 ${
-                    isSelected ? 'bg-blue-50/40 dark:bg-blue-950/20' : ''
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                      {/* Checkbox and Sequence */}
-                      <div className="flex items-center gap-1.5 pt-0.5 shrink-0" onClick={e => e.stopPropagation()}>
-                        <input 
-                          type="checkbox" 
-                          checked={isSelected}
-                          onChange={(e) => {
-                            if (e.target.checked) setSelectedStudents([...selectedStudents, s.id]);
-                            else setSelectedStudents(selectedStudents.filter(id => id !== s.id));
-                          }}
-                          className="rounded border-slate-300 cursor-pointer w-4 h-4"
-                        />
-                        <span className="font-mono text-xs font-bold text-slate-400 w-5 text-center">
-                          {idx + 1}
+                <React.Fragment key={s.id}>
+                  {isFirstOfLetter && (
+                    <div 
+                      id={`modern-mobile-section-${firstLetter}`}
+                      className="sticky top-0 z-10 bg-slate-100/95 dark:bg-slate-800/95 backdrop-blur px-3 py-1.5 border-y border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs font-black text-blue-600 dark:text-blue-400"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center text-[11px]">
+                          {firstLetter}
                         </span>
+                        <span>حرف {firstLetter}</span>
                       </div>
-
-                      {/* Initial Avatar */}
-                      <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-black text-xs flex items-center justify-center shrink-0 border border-slate-200/80 dark:border-slate-700 mt-0.5">
-                        {firstLetter}
-                      </div>
-
-                      {/* Name & Badges */}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-black text-slate-800 dark:text-slate-100 text-sm leading-snug">
-                            {cleanName(s.firstName)}
+                      <span className="text-[10px] text-slate-400 font-bold">
+                        {studentsByLetter[firstLetter]?.length ? `${studentsByLetter[firstLetter].length} طالب` : ''}
+                      </span>
+                    </div>
+                  )}
+                  <div 
+                    id={`modern-mobile-student-${s.id}`}
+                    onClick={() => { setSelectedId(s.id); setView('detail'); }}
+                    className={`p-3 transition-colors cursor-pointer active:bg-blue-50/50 dark:active:bg-slate-800/50 ${
+                      isSelected ? 'bg-blue-50/40 dark:bg-blue-950/20' : ''
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                        {/* Checkbox and Sequence */}
+                        <div className="flex items-center gap-1.5 pt-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+                          <input 
+                            type="checkbox" 
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedStudents([...selectedStudents, s.id]);
+                              else setSelectedStudents(selectedStudents.filter(id => id !== s.id));
+                            }}
+                            className="rounded border-slate-300 cursor-pointer w-4 h-4"
+                          />
+                          <span className="font-mono text-xs font-bold text-slate-400 w-5 text-center">
+                            {idx + 1}
                           </span>
-                          {/* Small copy button */}
-                          <button
-                            type="button"
-                            onClick={(e) => handleCopyStudentName(e, s)}
-                            className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
-                            title={copiedStudentId === s.id ? "تم النسخ!" : "نسخ اسم الطالب"}
-                          >
-                            {copiedStudentId === s.id ? (
-                              <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.5 rounded">
-                                <Check size={11} /> تم النسخ
-                              </span>
-                            ) : (
-                              <Copy size={13} className="text-slate-400 hover:text-blue-600" />
-                            )}
-                          </button>
                         </div>
 
-                        {s.lastName && (
-                          <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-0.5">
-                            اللقب: {s.lastName}
-                          </div>
-                        )}
+                        {/* Initial Avatar */}
+                        <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-black text-xs flex items-center justify-center shrink-0 border border-slate-200/80 dark:border-slate-700 mt-0.5">
+                          {firstLetter}
+                        </div>
 
-                        {/* Badges: Page and Reg number side-by-side without clipping */}
-                        <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                          <span className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 px-2.5 py-0.5 rounded-lg font-mono font-bold text-xs">
-                            ص {s.pageNumber}
-                          </span>
-                          <span className={`${currentTheme.primary} text-white px-2.5 py-0.5 rounded-lg font-mono font-bold text-xs`}>
-                            قيد {s.regNumber}
-                          </span>
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            s.status === 'graduated' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' :
-                            s.status === 'left' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' :
-                            s.status === 'transferred' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' :
-                            'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                          }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${
-                              s.status === 'graduated' ? 'bg-blue-600' :
-                              s.status === 'left' ? 'bg-rose-600' :
-                              s.status === 'transferred' ? 'bg-amber-600' :
-                              'bg-emerald-600'
-                            }`}></span>
-                            <span>
-                              {s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}
+                        {/* Name & Badges */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-black text-slate-800 dark:text-slate-100 text-sm leading-snug">
+                              {cleanName(s.firstName)}
                             </span>
-                          </span>
-                        </div>
+                            {/* Small copy button */}
+                            <button
+                              type="button"
+                              onClick={(e) => handleCopyStudentName(e, s)}
+                              className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
+                              title={copiedStudentId === s.id ? "تم النسخ!" : "نسخ اسم الطالب"}
+                            >
+                              {copiedStudentId === s.id ? (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.5 rounded">
+                                  <Check size={11} /> تم النسخ
+                                </span>
+                              ) : (
+                                <Copy size={13} className="text-slate-400 hover:text-blue-600" />
+                              )}
+                            </button>
+                            {/* Quick status shortcut button next to name */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenQuickStatus(s);
+                              }}
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border transition-all cursor-pointer hover:opacity-90 active:scale-95 shrink-0 ${
+                                s.status === 'graduated' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800' :
+                                s.status === 'left' ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800' :
+                                s.status === 'transferred' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800' :
+                                'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
+                              }`}
+                              title="تعديل سريع للحالة"
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                s.status === 'graduated' ? 'bg-blue-600' :
+                                s.status === 'left' ? 'bg-rose-600' :
+                                s.status === 'transferred' ? 'bg-amber-600' :
+                                'bg-emerald-600'
+                              }`}></span>
+                              <span>{s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}</span>
+                              <SlidersHorizontal size={9} className="opacity-70 mr-0.5" />
+                            </button>
+                          </div>
+
+                          {s.lastName && (
+                            <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-0.5">
+                              اللقب: {s.lastName}
+                            </div>
+                          )}
+
+                          {/* Badges: Page and Reg number side-by-side without clipping */}
+                          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                            <span className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 px-2.5 py-0.5 rounded-lg font-mono font-bold text-xs">
+                              ص {s.pageNumber}
+                            </span>
+                            <span className={`${currentTheme.primary} text-white px-2.5 py-0.5 rounded-lg font-mono font-bold text-xs`}>
+                              قيد {s.regNumber}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenQuickStatus(s);
+                              }}
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer hover:opacity-85 ${
+                                s.status === 'graduated' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' :
+                                s.status === 'left' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' :
+                                s.status === 'transferred' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' :
+                                'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                              }`}
+                              title="انقر لتعديل الحالة سريعاً"
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                s.status === 'graduated' ? 'bg-blue-600' :
+                                s.status === 'left' ? 'bg-rose-600' :
+                                s.status === 'transferred' ? 'bg-amber-600' :
+                                'bg-emerald-600'
+                              }`}></span>
+                              <span>
+                                {s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}
+                              </span>
+                            </button>
+                          </div>
 
                         {/* Transferred info */}
                         {s.status === 'transferred' && (s.docDestination || s.transferGrade) && (
@@ -1568,9 +1694,10 @@ const ModernAppLayout = ({
                     </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              </React.Fragment>
+            );
+          })}
+        </div>
 
           {/* 4B. Desktop Table View (>= md) */}
           <div className="hidden md:block overflow-x-auto">
@@ -1601,123 +1728,176 @@ const ModernAppLayout = ({
                 {displayed.map((s, idx) => {
                   const isSelected = selectedStudents.includes(s.id);
                   const firstLetter = cleanName(s.firstName).charAt(0) || 'ط';
+                  const isFirstOfLetter = sortBy === 'alphabetical' && !debouncedQuery && (
+                    idx === 0 || cleanName(displayed[idx - 1].firstName).charAt(0) !== firstLetter
+                  );
                   return (
-                    <tr 
-                      key={s.id}
-                      onClick={() => { setSelectedId(s.id); setView('detail'); }}
-                      className={`hover:bg-blue-50/50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group ${
-                        isSelected ? 'bg-blue-50/30 dark:bg-blue-950/20' : ''
-                      }`}
-                    >
-                      <td className="p-2.5 text-center" onClick={e => e.stopPropagation()}>
-                        <input 
-                          type="checkbox" 
-                          checked={isSelected}
-                          onChange={(e) => {
-                            if (e.target.checked) setSelectedStudents([...selectedStudents, s.id]);
-                            else setSelectedStudents(selectedStudents.filter(id => id !== s.id));
-                          }}
-                          className="rounded border-slate-300 cursor-pointer"
-                        />
-                      </td>
-                      <td className="p-2.5 text-center font-mono text-slate-400 font-bold">
-                        {idx + 1}
-                      </td>
-                      <td className="p-2.5">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-black text-xs flex items-center justify-center shrink-0 border border-slate-200/80 dark:border-slate-700">
-                            {firstLetter}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-black text-slate-800 dark:text-slate-100 text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                                {cleanName(s.firstName)}
+                    <React.Fragment key={s.id}>
+                      {isFirstOfLetter && (
+                        <tr 
+                          id={`modern-section-${firstLetter}`}
+                          className="bg-slate-100/95 dark:bg-slate-800/95 text-blue-600 dark:text-blue-400 font-black text-xs border-y border-slate-200 dark:border-slate-700"
+                        >
+                          <td colSpan={7} className="px-3 py-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center text-[11px]">
+                                {firstLetter}
                               </span>
-                              {/* Small Copy Button */}
-                              <button
-                                type="button"
-                                onClick={(e) => handleCopyStudentName(e, s)}
-                                className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
-                                title={copiedStudentId === s.id ? "تم النسخ!" : "نسخ اسم الطالب"}
-                              >
-                                {copiedStudentId === s.id ? (
-                                  <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.5 rounded">
-                                    <Check size={11} /> منسوخ
-                                  </span>
-                                ) : (
-                                  <Copy size={13} className="text-slate-400 hover:text-blue-600" />
-                                )}
-                              </button>
+                              <span>حرف {firstLetter}</span>
+                              <span className="text-[10px] font-bold text-slate-400">({studentsByLetter[firstLetter]?.length || 0} طالب)</span>
                             </div>
-                            {s.lastName && (
-                              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                                اللقب: {s.lastName}
-                              </span>
-                            )}
+                          </td>
+                        </tr>
+                      )}
+                      <tr 
+                        id={`modern-desktop-student-${s.id}`}
+                        onClick={() => { setSelectedId(s.id); setView('detail'); }}
+                        className={`hover:bg-blue-50/50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group ${
+                          isSelected ? 'bg-blue-50/30 dark:bg-blue-950/20' : ''
+                        }`}
+                      >
+                        <td className="p-2.5 text-center" onClick={e => e.stopPropagation()}>
+                          <input 
+                            type="checkbox" 
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedStudents([...selectedStudents, s.id]);
+                              else setSelectedStudents(selectedStudents.filter(id => id !== s.id));
+                            }}
+                            className="rounded border-slate-300 cursor-pointer"
+                          />
+                        </td>
+                        <td className="p-2.5 text-center font-mono text-slate-400 font-bold">
+                          {idx + 1}
+                        </td>
+                        <td className="p-2.5">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-black text-xs flex items-center justify-center shrink-0 border border-slate-200/80 dark:border-slate-700">
+                              {firstLetter}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-black text-slate-800 dark:text-slate-100 text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                  {cleanName(s.firstName)}
+                                </span>
+                                {/* Small Copy Button */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleCopyStudentName(e, s)}
+                                  className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
+                                  title={copiedStudentId === s.id ? "تم النسخ!" : "نسخ اسم الطالب"}
+                                >
+                                  {copiedStudentId === s.id ? (
+                                    <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.5 rounded">
+                                      <Check size={11} /> منسوخ
+                                    </span>
+                                  ) : (
+                                    <Copy size={13} className="text-slate-400 hover:text-blue-600" />
+                                  )}
+                                </button>
+                                {/* Quick status shortcut button next to name */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onOpenQuickStatus(s);
+                                  }}
+                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border transition-all cursor-pointer hover:opacity-90 active:scale-95 shrink-0 ${
+                                    s.status === 'graduated' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800' :
+                                    s.status === 'left' ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800' :
+                                    s.status === 'transferred' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800' :
+                                    'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
+                                  }`}
+                                  title="تعديل سريع للحالة"
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full ${
+                                    s.status === 'graduated' ? 'bg-blue-600' :
+                                    s.status === 'left' ? 'bg-rose-600' :
+                                    s.status === 'transferred' ? 'bg-amber-600' :
+                                    'bg-emerald-600'
+                                  }`}></span>
+                                  <span>{s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}</span>
+                                  <SlidersHorizontal size={9} className="opacity-70 mr-0.5" />
+                                </button>
+                              </div>
+                              {s.lastName && (
+                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                  اللقب: {s.lastName}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="p-2.5 text-center">
-                        <span className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 px-2 py-0.5 rounded-lg font-mono font-bold text-xs">
-                          ص {s.pageNumber}
-                        </span>
-                      </td>
-                      <td className="p-2.5 text-center">
-                        <span className={`${currentTheme.primary} text-white px-2 py-0.5 rounded-lg font-mono font-bold text-xs`}>
-                          قيد {s.regNumber}
-                        </span>
-                      </td>
-                      <td className="p-2.5 text-center">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                          s.status === 'graduated' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' :
-                          s.status === 'left' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' :
-                          s.status === 'transferred' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' :
-                          'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${
-                            s.status === 'graduated' ? 'bg-blue-600' :
-                            s.status === 'left' ? 'bg-rose-600' :
-                            s.status === 'transferred' ? 'bg-amber-600' :
-                            'bg-emerald-600'
-                          }`}></span>
-                          <span>
-                            {s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}
+                        </td>
+                        <td className="p-2.5 text-center">
+                          <span className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 px-2 py-0.5 rounded-lg font-mono font-bold text-xs">
+                            ص {s.pageNumber}
                           </span>
-                        </span>
-                      </td>
-                      <td className="p-2.5 text-center" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-center gap-1">
-                          <button 
-                            onClick={() => { setSelectedId(s.id); setView('detail'); }} 
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                            title="عرض التفاصيل"
+                        </td>
+                        <td className="p-2.5 text-center">
+                          <span className={`${currentTheme.primary} text-white px-2 py-0.5 rounded-lg font-mono font-bold text-xs`}>
+                            قيد {s.regNumber}
+                          </span>
+                        </td>
+                        <td className="p-2.5 text-center">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenQuickStatus(s);
+                            }}
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold cursor-pointer hover:opacity-85 ${
+                              s.status === 'graduated' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' :
+                              s.status === 'left' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' :
+                              s.status === 'transferred' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' :
+                              'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                            }`}
+                            title="انقر لتعديل الحالة سريعاً"
                           >
-                            <Eye size={15} />
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              s.status === 'graduated' ? 'bg-blue-600' :
+                              s.status === 'left' ? 'bg-rose-600' :
+                              s.status === 'transferred' ? 'bg-amber-600' :
+                              'bg-emerald-600'
+                            }`}></span>
+                            <span>
+                              {s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}
+                            </span>
                           </button>
-                          <button 
-                            onClick={() => { setSelectedId(s.id); setView('edit'); setSimilarStudents([]); }} 
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                            title="تعديل الطالب"
-                          >
-                            <Edit2 size={15} />
-                          </button>
-                          <button 
-                            onClick={() => { setSelectedId(s.id); setPrintMode('single'); setTimeout(() => window.print(), 500); }} 
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                            title="طباعة بطاقة الطالب"
-                          >
-                            <Printer size={15} />
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(s.id)} 
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                            title="حذف"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                        </td>
+                        <td className="p-2.5 text-center" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center justify-center gap-1">
+                            <button 
+                              onClick={() => { setSelectedId(s.id); setView('detail'); }} 
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                              title="عرض التفاصيل"
+                            >
+                              <Eye size={15} />
+                            </button>
+                            <button 
+                              onClick={() => { setSelectedId(s.id); setView('edit'); setSimilarStudents([]); }} 
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                              title="تعديل الطالب"
+                            >
+                              <Edit2 size={15} />
+                            </button>
+                            <button 
+                              onClick={() => { setSelectedId(s.id); setPrintMode('single'); setTimeout(() => window.print(), 500); }} 
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                              title="طباعة بطاقة الطالب"
+                            >
+                              <Printer size={15} />
+                            </button>
+                            <button 
+                              onClick={() => handleDelete(s.id)} 
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                              title="حذف"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    </React.Fragment>
                   );
                 })}
               </tbody>
@@ -1727,130 +1907,184 @@ const ModernAppLayout = ({
       ) : (
         /* Modern Grid Cards View */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {displayed.map((s) => {
+          {displayed.map((s, idx) => {
             const isSelected = selectedStudents.includes(s.id);
             const firstLetter = cleanName(s.firstName).charAt(0) || 'ط';
+            const isFirstOfLetter = sortBy === 'alphabetical' && !debouncedQuery && (
+              idx === 0 || cleanName(displayed[idx - 1].firstName).charAt(0) !== firstLetter
+            );
             return (
-              <div 
-                key={s.id}
-                onClick={() => { setSelectedId(s.id); setView('detail'); }}
-                className={`glass-panel modern-card-hover rounded-2xl p-4 border transition-all cursor-pointer relative group ${
-                  isSelected 
-                    ? 'border-blue-400 ring-2 ring-blue-400/20 bg-blue-50/20' 
-                    : 'border-slate-200/90 dark:border-slate-800'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3 mb-2.5">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-sm">
-                      {firstLetter}
+              <React.Fragment key={s.id}>
+                {isFirstOfLetter && (
+                  <div 
+                    id={`modern-grid-section-${firstLetter}`}
+                    className="col-span-full bg-slate-100/90 dark:bg-slate-800/90 rounded-xl px-3 py-2 flex items-center justify-between text-xs font-black text-blue-600 dark:text-blue-400 border border-slate-200/80 dark:border-slate-700"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs">
+                        {firstLetter}
+                      </span>
+                      <span>حرف {firstLetter}</span>
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <h3 className="font-black text-slate-800 dark:text-slate-100 text-sm group-hover:text-blue-600 truncate transition-colors">
-                          {cleanName(s.firstName)}
-                        </h3>
-                        {/* Small Copy Button */}
-                        <button
-                          type="button"
-                          onClick={(e) => handleCopyStudentName(e, s)}
-                          className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
-                          title={copiedStudentId === s.id ? "تم النسخ!" : "نسخ اسم الطالب"}
-                        >
-                          {copiedStudentId === s.id ? (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.5 rounded">
-                              <Check size={11} /> منسوخ
-                            </span>
-                          ) : (
-                            <Copy size={13} className="text-slate-400 hover:text-blue-600" />
-                          )}
-                        </button>
+                    <span className="text-[10px] text-slate-400 font-bold">
+                      {studentsByLetter[firstLetter]?.length ? `${studentsByLetter[firstLetter].length} طالب` : ''}
+                    </span>
+                  </div>
+                )}
+                <div 
+                  id={`modern-grid-student-${s.id}`}
+                  key={s.id}
+                  onClick={() => { setSelectedId(s.id); setView('detail'); }}
+                  className={`glass-panel modern-card-hover rounded-2xl p-4 border transition-all cursor-pointer relative group ${
+                    isSelected 
+                      ? 'border-blue-400 ring-2 ring-blue-400/20 bg-blue-50/20' 
+                      : 'border-slate-200/90 dark:border-slate-800'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3 mb-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-sm">
+                        {firstLetter}
                       </div>
-                      {s.lastName && (
-                        <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 truncate">
-                          اللقب: {s.lastName}
-                        </p>
-                      )}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h3 className="font-black text-slate-800 dark:text-slate-100 text-sm group-hover:text-blue-600 truncate transition-colors">
+                            {cleanName(s.firstName)}
+                          </h3>
+                          {/* Small Copy Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleCopyStudentName(e, s)}
+                            className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
+                            title={copiedStudentId === s.id ? "تم النسخ!" : "نسخ اسم الطالب"}
+                          >
+                            {copiedStudentId === s.id ? (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.5 rounded">
+                                <Check size={11} /> منسوخ
+                              </span>
+                            ) : (
+                              <Copy size={13} className="text-slate-400 hover:text-blue-600" />
+                            )}
+                          </button>
+                          {/* Quick status shortcut button next to name */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenQuickStatus(s);
+                            }}
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border transition-all cursor-pointer hover:opacity-90 active:scale-95 shrink-0 ${
+                              s.status === 'graduated' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800' :
+                              s.status === 'left' ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800' :
+                              s.status === 'transferred' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800' :
+                              'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
+                            }`}
+                            title="تعديل سريع للحالة"
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              s.status === 'graduated' ? 'bg-blue-600' :
+                              s.status === 'left' ? 'bg-rose-600' :
+                              s.status === 'transferred' ? 'bg-amber-600' :
+                              'bg-emerald-600'
+                            }`}></span>
+                            <span>{s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}</span>
+                            <SlidersHorizontal size={9} className="opacity-70 mr-0.5" />
+                          </button>
+                        </div>
+                        {s.lastName && (
+                          <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 truncate">
+                            اللقب: {s.lastName}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                      <input 
+                        type="checkbox" 
+                        checked={isSelected}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedStudents([...selectedStudents, s.id]);
+                          else setSelectedStudents(selectedStudents.filter(id => id !== s.id));
+                        }}
+                        className="rounded border-slate-300 cursor-pointer"
+                      />
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
-                    <input 
-                      type="checkbox" 
-                      checked={isSelected}
-                      onChange={(e) => {
-                        if (e.target.checked) setSelectedStudents([...selectedStudents, s.id]);
-                        else setSelectedStudents(selectedStudents.filter(id => id !== s.id));
+                  {/* Chips: Page first, then Reg, and Status */}
+                  <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                    <span className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 px-2.5 py-1 rounded-xl text-xs font-bold font-mono">
+                      صفحة {s.pageNumber}
+                    </span>
+                    <span className={`${currentTheme.primary} text-white px-2.5 py-1 rounded-xl text-xs font-bold font-mono`}>
+                      قيد {s.regNumber}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenQuickStatus(s);
                       }}
-                      className="rounded border-slate-300 cursor-pointer"
-                    />
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full mr-auto cursor-pointer hover:opacity-85 ${
+                        s.status === 'graduated' ? 'bg-blue-100 text-blue-800' :
+                        s.status === 'left' ? 'bg-rose-100 text-rose-800' :
+                        s.status === 'transferred' ? 'bg-amber-100 text-amber-800' :
+                        'bg-emerald-100 text-emerald-800'
+                      }`}
+                      title="انقر لتعديل الحالة سريعاً"
+                    >
+                      {s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}
+                    </button>
+                  </div>
+
+                  {/* Transferred summary if applicable */}
+                  {s.status === 'transferred' && (s.docDestination || s.transferGrade) && (
+                    <div className="bg-amber-50/70 dark:bg-amber-950/30 p-2 rounded-xl text-[11px] text-amber-900 dark:text-amber-300 font-semibold mb-3 border border-amber-200/60 dark:border-amber-900/60">
+                      {s.docDestination && <div>الجهة: {s.docDestination}</div>}
+                      {s.transferGrade && <div>الصف: {s.transferGrade}</div>}
+                    </div>
+                  )}
+
+                  {/* Graduated summary if applicable */}
+                  {s.status === 'graduated' && (s.graduationYear || s.graduationGrade || s.graduationRound) && (
+                    <div className="bg-blue-50/70 dark:bg-blue-950/30 p-2 rounded-xl text-[11px] text-blue-900 dark:text-blue-300 font-semibold mb-3 border border-blue-200/60 dark:border-blue-900/60">
+                      <div>🎓 التخرج: {s.graduationGrade || 'السادس'}{s.graduationRound ? ' • ' + s.graduationRound : ''}</div>
+                      {s.graduationYear && <div>العام الدراسي: {s.graduationYear}</div>}
+                    </div>
+                  )}
+
+                  {/* Bottom Card Actions */}
+                  <div className="flex items-center justify-end gap-1 pt-2 border-t border-slate-100 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+                    <button 
+                      onClick={() => { setSelectedId(s.id); setView('detail'); }} 
+                      className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 hover:text-blue-600 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Eye size={13} /> عرض
+                    </button>
+                    <button 
+                      onClick={() => { setSelectedId(s.id); setView('edit'); setSimilarStudents([]); }} 
+                      className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-amber-50 hover:text-amber-600 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Edit2 size={13} /> تعديل
+                    </button>
+                    <button 
+                      onClick={() => { setSelectedId(s.id); setPrintMode('single'); setTimeout(() => window.print(), 500); }} 
+                      className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                      title="طباعة بطاقة الطالب"
+                    >
+                      <Printer size={14} />
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(s.id)} 
+                      className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-red-50 hover:text-red-600 rounded-lg text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                      title="حذف"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </div>
-
-                {/* Chips: Page first, then Reg, and Status */}
-                <div className="flex flex-wrap items-center gap-1.5 mb-3">
-                  <span className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 px-2.5 py-1 rounded-xl text-xs font-bold font-mono">
-                    صفحة {s.pageNumber}
-                  </span>
-                  <span className={`${currentTheme.primary} text-white px-2.5 py-1 rounded-xl text-xs font-bold font-mono`}>
-                    قيد {s.regNumber}
-                  </span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full mr-auto ${
-                    s.status === 'graduated' ? 'bg-blue-100 text-blue-800' :
-                    s.status === 'left' ? 'bg-rose-100 text-rose-800' :
-                    s.status === 'transferred' ? 'bg-amber-100 text-amber-800' :
-                    'bg-emerald-100 text-emerald-800'
-                  }`}>
-                    {s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}
-                  </span>
-                </div>
-
-                {/* Transferred summary if applicable */}
-                {s.status === 'transferred' && (s.docDestination || s.transferGrade) && (
-                  <div className="bg-amber-50/70 dark:bg-amber-950/30 p-2 rounded-xl text-[11px] text-amber-900 dark:text-amber-300 font-semibold mb-3 border border-amber-200/60 dark:border-amber-900/60">
-                    {s.docDestination && <div>الجهة: {s.docDestination}</div>}
-                    {s.transferGrade && <div>الصف: {s.transferGrade}</div>}
-                  </div>
-                )}
-
-                {/* Graduated summary if applicable */}
-                {s.status === 'graduated' && (s.graduationYear || s.graduationGrade || s.graduationRound) && (
-                  <div className="bg-blue-50/70 dark:bg-blue-950/30 p-2 rounded-xl text-[11px] text-blue-900 dark:text-blue-300 font-semibold mb-3 border border-blue-200/60 dark:border-blue-900/60">
-                    <div>🎓 التخرج: {s.graduationGrade || 'السادس'}{s.graduationRound ? ' • ' + s.graduationRound : ''}</div>
-                    {s.graduationYear && <div>العام الدراسي: {s.graduationYear}</div>}
-                  </div>
-                )}
-
-                {/* Bottom Card Actions */}
-                <div className="flex items-center justify-end gap-1 pt-2 border-t border-slate-100 dark:border-slate-800" onClick={e => e.stopPropagation()}>
-                  <button 
-                    onClick={() => { setSelectedId(s.id); setView('detail'); }} 
-                    className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 hover:text-blue-600 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 transition-colors flex items-center gap-1 cursor-pointer"
-                  >
-                    <Eye size={13} /> عرض
-                  </button>
-                  <button 
-                    onClick={() => { setSelectedId(s.id); setView('edit'); setSimilarStudents([]); }} 
-                    className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-amber-50 hover:text-amber-600 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 transition-colors flex items-center gap-1 cursor-pointer"
-                  >
-                    <Edit2 size={13} /> تعديل
-                  </button>
-                  <button 
-                    onClick={() => { setSelectedId(s.id); setPrintMode('single'); setTimeout(() => window.print(), 500); }} 
-                    className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
-                    title="طباعة بطاقة الطالب"
-                  >
-                    <Printer size={14} />
-                  </button>
-                  <button 
-                    onClick={() => handleDelete(s.id)} 
-                    className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-red-50 hover:text-red-600 rounded-lg text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
-                    title="حذف"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
+              </React.Fragment>
             );
           })}
         </div>
@@ -2287,6 +2521,57 @@ export default function App() {
     setNewGradYearInput('');
     setShowAddGradYearInput(false);
     setAlertConfig({ message: `تمت إضافة وحفظ العام الدراسي ${trimmed} بنجاح`, type: 'success' });
+  };
+
+  // Quick Status Editing Shortcut State & Handlers
+  const [quickStatusStudent, setQuickStatusStudent] = useState<Student | null>(null);
+  const [quickStatusValue, setQuickStatusValue] = useState<'active' | 'transferred' | 'left' | 'graduated'>('active');
+  const [quickDocDestination, setQuickDocDestination] = useState('');
+  const [quickTransferGrade, setQuickTransferGrade] = useState('');
+  const [quickDocDate, setQuickDocDate] = useState('');
+  const [quickDocPurpose, setQuickDocPurpose] = useState('إكمال الدراسة');
+  const [quickGradYear, setQuickGradYear] = useState('2024-2025');
+  const [quickGradRound, setQuickGradRound] = useState('الدور الأول');
+  const [quickGradGrade, setQuickGradGrade] = useState('السادس العلمي');
+
+  const openQuickStatus = (student: Student) => {
+    setQuickStatusStudent(student);
+    setQuickStatusValue(student.status || 'active');
+    setQuickDocDestination(student.docDestination || '');
+    setQuickTransferGrade(student.transferGrade || (student as any).grade || '');
+    setQuickDocDate(student.docDate || new Date().toISOString().split('T')[0]);
+    setQuickDocPurpose(student.docPurpose || 'إكمال الدراسة');
+    setQuickGradYear(student.graduationYear || (allGraduationYears[0] || '2024-2025'));
+    setQuickGradRound(student.graduationRound || 'الدور الأول');
+    setQuickGradGrade(student.graduationGrade || 'السادس العلمي');
+  };
+
+  const handleSaveQuickStatus = async () => {
+    if (!quickStatusStudent) return;
+    try {
+      const updates: Partial<Student> = {
+        status: quickStatusValue
+      };
+      if (quickStatusValue === 'transferred') {
+        updates.docDestination = quickDocDestination.trim();
+        updates.transferGrade = quickTransferGrade.trim();
+        updates.docDate = quickDocDate;
+        updates.docPurpose = quickDocPurpose;
+      } else if (quickStatusValue === 'graduated') {
+        updates.graduationYear = quickGradYear.trim();
+        updates.graduationRound = quickGradRound.trim();
+        updates.graduationGrade = quickGradGrade.trim();
+      }
+      await updateDoc(doc(db, "students", quickStatusStudent.id), updates as any);
+      await refreshStats();
+      const studentName = cleanName(quickStatusStudent.firstName);
+      setQuickStatusStudent(null);
+      const statusAr = quickStatusValue === 'active' ? 'مستمر' : quickStatusValue === 'transferred' ? 'منقول' : quickStatusValue === 'left' ? 'تارك' : 'متخرج';
+      setAlertConfig({ message: `تم تحديث حالة الطالب (${studentName}) إلى [${statusAr}] بنجاح`, type: 'success' });
+    } catch (err) {
+      console.error(err);
+      setAlertConfig({ message: 'فشل حفظ الحالة', type: 'error' });
+    }
   };
 
   useEffect(() => {
@@ -2849,6 +3134,8 @@ export default function App() {
                         setModernViewType={setModernViewType}
                         view={view}
                         debouncedQuery={debouncedQuery}
+                        setVisibleCount={setVisibleCount}
+                        onOpenQuickStatus={openQuickStatus}
                       />
                     ) : (
                       <>
@@ -3087,15 +3374,41 @@ export default function App() {
                       {alphabetLetters.map(letter => (
                         <button
                           key={letter}
+                          type="button"
                           onClick={() => {
-                            const offset = 130;
-                            const desktopSection = document.getElementById(`section-${letter}`);
-                            const mobileSection = document.getElementById(`mobile-section-${letter}`);
-                            const isMobile = window.innerWidth < 768;
-                            const section = isMobile ? (mobileSection || desktopSection) : (desktopSection || mobileSection);
-                            if (section) {
-                              const top = section.getBoundingClientRect().top + window.pageYOffset - offset;
-                              window.scrollTo({ top, behavior: 'smooth' });
+                            const normLetter = letter.trim();
+                            const alefs = ['أ', 'إ', 'آ', 'ا'];
+                            const isAlef = alefs.includes(normLetter);
+                            const targetIdx = filtered.findIndex(s => {
+                              const firstChar = cleanName(s.firstName).trim().charAt(0);
+                              if (!firstChar) return false;
+                              if (firstChar === normLetter) return true;
+                              if (isAlef && alefs.includes(firstChar)) return true;
+                              return false;
+                            });
+                            if (targetIdx !== -1) {
+                              if (targetIdx >= displayed.length) {
+                                setVisibleCount(Math.max(displayed.length, targetIdx + 60));
+                              }
+                              const targetStudent = filtered[targetIdx];
+                              const targetChar = cleanName(targetStudent.firstName).trim().charAt(0);
+                              const doScrollClassic = () => {
+                                const isMobile = window.innerWidth < 768;
+                                const section = isMobile 
+                                  ? (document.getElementById(`mobile-section-${targetChar}`) || document.getElementById(`mobile-section-${normLetter}`) || document.getElementById(`section-${targetChar}`))
+                                  : (document.getElementById(`section-${targetChar}`) || document.getElementById(`section-${normLetter}`) || document.getElementById(`mobile-section-${targetChar}`));
+                                if (section) {
+                                  const top = section.getBoundingClientRect().top + window.pageYOffset - 130;
+                                  window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+                                  return true;
+                                }
+                                return false;
+                              };
+                              setTimeout(() => {
+                                if (!doScrollClassic()) {
+                                  setTimeout(doScrollClassic, 120);
+                                }
+                              }, 50);
                             }
                           }}
                           className="alphabet-nav-btn"
@@ -3179,14 +3492,19 @@ export default function App() {
                                   <td className="px-4 py-2 text-center"><span className="bg-[#FFA500] text-white px-2 py-0.5 rounded-md font-mono inline-block min-w-[40px] shadow-sm text-[10px]">{s.pageNumber}</span></td>
                                   <td className="px-4 py-2 text-center"><span className={`${currentTheme.primary} text-white px-2 py-0.5 rounded-md font-mono inline-block min-w-[40px] shadow-sm transition-colors text-[10px]`}>{s.regNumber}</span></td>
                                   <td className="px-4 py-2 text-center">
-                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                      s.status === 'graduated' ? 'bg-blue-100 text-blue-700' : 
-                                      s.status === 'left' ? 'bg-rose-100 text-rose-700' : 
-                                      s.status === 'transferred' ? 'bg-amber-100 text-amber-700' : 
-                                      'bg-emerald-100 text-emerald-700'
-                                    }`}>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); openQuickStatus(s); }}
+                                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full cursor-pointer hover:opacity-80 transition-all ${
+                                        s.status === 'graduated' ? 'bg-blue-100 text-blue-700' : 
+                                        s.status === 'left' ? 'bg-rose-100 text-rose-700' : 
+                                        s.status === 'transferred' ? 'bg-amber-100 text-amber-700' : 
+                                        'bg-emerald-100 text-emerald-700'
+                                      }`}
+                                      title="انقر لتعديل الحالة سريعاً"
+                                    >
                                       {s.status === 'graduated' ? 'خ' : s.status === 'left' ? 'ت' : s.status === 'transferred' ? 'ن' : 'م'}
-                                    </span>
+                                    </button>
                                   </td>
                                  </tr>
                               ))}
@@ -3255,14 +3573,19 @@ export default function App() {
                               <td className="px-4 py-2 text-center"><span className="bg-[#FFA500] text-white px-2 py-0.5 rounded-md font-mono inline-block min-w-[40px] shadow-sm text-[10px]">{s.pageNumber}</span></td>
                               <td className="px-4 py-2 text-center"><span className={`${currentTheme.primary} text-white px-2 py-0.5 rounded-md font-mono inline-block min-w-[40px] shadow-sm transition-colors text-[10px]`}>{s.regNumber}</span></td>
                               <td className="px-4 py-2 text-center">
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                  s.status === 'graduated' ? 'bg-blue-100 text-blue-700' : 
-                                  s.status === 'left' ? 'bg-rose-100 text-rose-700' : 
-                                  s.status === 'transferred' ? 'bg-amber-100 text-amber-700' : 
-                                  'bg-emerald-100 text-emerald-700'
-                                }`}>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); openQuickStatus(s); }}
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full cursor-pointer hover:opacity-80 transition-all ${
+                                    s.status === 'graduated' ? 'bg-blue-100 text-blue-700' : 
+                                    s.status === 'left' ? 'bg-rose-100 text-rose-700' : 
+                                    s.status === 'transferred' ? 'bg-amber-100 text-amber-700' : 
+                                    'bg-emerald-100 text-emerald-700'
+                                  }`}
+                                  title="انقر لتعديل الحالة سريعاً"
+                                >
                                   {s.status === 'graduated' ? 'خ' : s.status === 'left' ? 'ت' : s.status === 'transferred' ? 'ن' : 'م'}
-                                </span>
+                                </button>
                               </td>
                              </tr>
                           ))}
@@ -3320,14 +3643,19 @@ export default function App() {
                                 <div className="mt-2 flex flex-wrap gap-2 border-t border-slate-100 pt-2 mr-8">
                                     <span className="bg-[#FFA500] text-white px-2 py-0.5 rounded text-xs font-bold shadow-sm">صفحة {s.pageNumber}</span>
                                     <span className={`${currentTheme.primary} text-white px-2 py-0.5 rounded text-xs font-bold shadow-sm transition-colors`}>قيد {s.regNumber}</span>
-                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                                      s.status === 'graduated' ? 'bg-blue-100 text-blue-700' : 
-                                      s.status === 'left' ? 'bg-rose-100 text-rose-700' : 
-                                      s.status === 'transferred' ? 'bg-amber-100 text-amber-700' : 
-                                      'bg-emerald-100 text-emerald-700'
-                                    }`}>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); openQuickStatus(s); }}
+                                      className={`text-xs font-bold px-2 py-0.5 rounded-full cursor-pointer hover:opacity-80 transition-all ${
+                                        s.status === 'graduated' ? 'bg-blue-100 text-blue-700' : 
+                                        s.status === 'left' ? 'bg-rose-100 text-rose-700' : 
+                                        s.status === 'transferred' ? 'bg-amber-100 text-amber-700' : 
+                                        'bg-emerald-100 text-emerald-700'
+                                      }`}
+                                      title="انقر لتعديل الحالة سريعاً"
+                                    >
                                       {s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}
-                                    </span>
+                                    </button>
                                 </div>
                               </div>
                             </div>
@@ -4069,50 +4397,429 @@ export default function App() {
         )}
 
         {/* Stats Modal */}
-        {view === 'stats' && (
-            <Modal onClose={() => setView('list')}>
-                <div className="bg-white rounded-2xl shadow-xl p-5 space-y-4 max-h-[80vh] flex flex-col w-full">
-                    <h2 className="text-lg font-bold flex items-center gap-2">
-                        <BarChart3 size={20} className="text-blue-600" /> توزيع الطلاب حسب القيد
-                    </h2>
-                    <div className="overflow-y-auto flex-1 custom-scrollbar">
-                        <table className="w-full text-right border-collapse">
-                            <thead className="bg-slate-50 sticky top-0 z-10">
-                                   <tr>
-                                    <th className="p-3 text-sm font-bold text-slate-500 border-b border-slate-200">رقم القيد</th>
-                                    <th className="p-3 text-sm font-bold text-slate-500 border-b border-slate-200">عدد الطلاب</th>
-                                   </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {regStats.length > 0 ? regStats.map((item) => (
-                                    <tr key={item.reg} className="hover:bg-slate-50 transition-colors">
-                                        <td className="p-3 font-bold text-slate-700 text-sm align-top">قيد {item.reg}</td>
-                                        <td className="p-3 font-bold text-slate-900 text-sm">
-                                            <div className="flex flex-col gap-1.5">
-                                                <span className="bg-slate-100 text-slate-800 px-2 py-1 rounded-lg w-fit text-xs">
-                                                    الإجمالي: {item.total} طالب
-                                                </span>
-                                                <div className="flex flex-wrap gap-1.5 text-[10px]">
-                                                    {item.active > 0 && <span className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-100">مستمر: {item.active}</span>}
-                                                    {item.transferred > 0 && <span className="bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-100">منقول: {item.transferred}</span>}
-                                                    {item.left > 0 && <span className="bg-rose-50 text-rose-700 px-1.5 py-0.5 rounded border border-rose-100">تارك: {item.left}</span>}
-                                                    {item.graduated > 0 && <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-100">متخرج: {item.graduated}</span>}
-                                                </div>
-                                            </div>
-                                           </td>
-                                       </tr>
-                                )) : (
-                                       <tr>
-                                        <td colSpan={2} className="p-4 text-center text-slate-400 font-bold text-sm">لا توجد بيانات متاحة</td>
-                                       </tr>
-                                )}
-                            </tbody>
-                           </table>
-                    </div>
-                     <button onClick={() => setView('list')} className="w-full py-3 bg-slate-100 font-bold rounded-xl text-slate-600 text-sm hover:bg-slate-200 transition-colors">إغلاق</button>
+        {/* Quick Status Shortcut Modal */}
+        {quickStatusStudent && (
+          <Modal onClose={() => setQuickStatusStudent(null)} zIndex="z-[60]" maxWidth="max-w-md">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto w-full text-right border border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black shadow-xs">
+                    <SlidersHorizontal size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-800 dark:text-slate-100 text-sm">تعديل سريع لحالة الطالب</h3>
+                    <p className="text-xs text-blue-600 dark:text-blue-400 font-bold">{cleanName(quickStatusStudent.firstName)} {quickStatusStudent.lastName || ''}</p>
+                  </div>
                 </div>
-            </Modal>
+                <button 
+                  type="button"
+                  onClick={() => setQuickStatusStudent(null)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Status Selector Options */}
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">اختر الحالة الدراسية:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'active', label: 'مستمر بالدراسة', color: 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300', dot: 'bg-emerald-500' },
+                    { id: 'transferred', label: 'منقول / صادر وثيقة', color: 'border-amber-500 bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300', dot: 'bg-amber-500' },
+                    { id: 'left', label: 'تارك للدراسة', color: 'border-rose-500 bg-rose-50 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300', dot: 'bg-rose-500' },
+                    { id: 'graduated', label: 'متخرج', color: 'border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300', dot: 'bg-blue-500' }
+                  ].map(opt => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setQuickStatusValue(opt.id as any)}
+                      className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                        quickStatusValue === opt.id 
+                          ? `${opt.color} ring-2 ring-blue-500/30 font-black shadow-xs` 
+                          : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${opt.dot}`}></span>
+                      <span>{opt.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Transferred Fields */}
+              {quickStatusValue === 'transferred' && (
+                <div className="p-3 bg-amber-50/70 dark:bg-amber-950/30 rounded-2xl border border-amber-200/80 dark:border-amber-900/60 space-y-2.5 animate-fade-in">
+                  <div className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                    <FileText size={14} /> بيانات النقل والوثيقة
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">الجهة الصادرة إليها:</label>
+                    <input 
+                      type="text"
+                      value={quickDocDestination}
+                      onChange={e => setQuickDocDestination(e.target.value)}
+                      placeholder="مثال: متوسطة البصرة للبنين"
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">الصف المنقول فيه:</label>
+                      <input 
+                        type="text"
+                        value={quickTransferGrade}
+                        onChange={e => setQuickTransferGrade(e.target.value)}
+                        placeholder="مثال: الرابع علمي"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">تاريخ الوثيقة:</label>
+                      <input 
+                        type="date"
+                        value={quickDocDate}
+                        onChange={e => setQuickDocDate(e.target.value)}
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Graduated Fields */}
+              {quickStatusValue === 'graduated' && (
+                <div className="p-3 bg-blue-50/70 dark:bg-blue-950/30 rounded-2xl border border-blue-200/80 dark:border-blue-900/60 space-y-2.5 animate-fade-in">
+                  <div className="text-xs font-bold text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
+                    <GraduationCap size={15} /> بيانات التخرج
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">العام الدراسي للتخرج:</label>
+                    <select
+                      value={quickGradYear}
+                      onChange={e => setQuickGradYear(e.target.value)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {allGraduationYears.map(y => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">الدور:</label>
+                      <select
+                        value={quickGradRound}
+                        onChange={e => setQuickGradRound(e.target.value)}
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="الدور الأول">الدور الأول</option>
+                        <option value="الدور الثاني">الدور الثاني</option>
+                        <option value="الدور الثالث">الدور الثالث</option>
+                        <option value="الدور الخاص">الدور الخاص</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">الصف:</label>
+                      <select
+                        value={quickGradGrade}
+                        onChange={e => setQuickGradGrade(e.target.value)}
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="السادس العلمي">السادس العلمي</option>
+                        <option value="السادس الأدبي">السادس الأدبي</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={handleSaveQuickStatus}
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  <Save size={15} /> حفظ وتحديث الحالة
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuickStatusStudent(null)}
+                  className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </div>
+          </Modal>
         )}
+
+        {/* Stats Modal with Recharts Visualizations */}
+        {view === 'stats' && (() => {
+          const activeStudents = students.filter(s => !s.isDeleted);
+          const activeTotal = activeStudents.filter(s => !s.status || s.status === 'active').length;
+          const transferredTotal = activeStudents.filter(s => s.status === 'transferred' || !!s.docDestination || !!s.docDate).length;
+          const leftTotal = activeStudents.filter(s => s.status === 'left').length;
+          const graduatedTotal = activeStudents.filter(s => s.status === 'graduated').length;
+          const grandTotal = activeStudents.length;
+
+          const pieData = [
+            { name: 'مستمر', value: activeTotal, color: '#10b981' },
+            { name: 'منقول', value: transferredTotal, color: '#f59e0b' },
+            { name: 'تارك', value: leftTotal, color: '#ef4444' },
+            { name: 'متخرج', value: graduatedTotal, color: '#3b82f6' }
+          ].filter(item => item.value > 0);
+
+          const barData = regStats.map(r => ({
+            name: `قيد ${r.reg}`,
+            مستمر: r.active,
+            منقول: r.transferred,
+            تارك: r.left,
+            متخرج: r.graduated,
+            total: r.total
+          }));
+
+          return (
+            <Modal onClose={() => setView('list')} maxWidth="max-w-5xl">
+              <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-4 sm:p-6 space-y-5 max-h-[88vh] flex flex-col w-full text-right border border-slate-100 dark:border-slate-800">
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-2xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 shadow-xs">
+                      <BarChart3 size={24} />
+                    </div>
+                    <div>
+                      <h2 className="text-base sm:text-lg font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                        لوحة الإحصائيات والرسوم البيانية
+                      </h2>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        تحليل بياني وتوزيع حالات الطلاب عبر دفاتر القيود
+                      </p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setView('list')} 
+                    className="p-1.5 rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="overflow-y-auto flex-1 custom-scrollbar space-y-5 pr-1 pl-1">
+                  {/* Summary Metric Chips */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                    <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700">
+                      <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400">إجمالي الطلاب</div>
+                      <div className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100 font-mono mt-0.5">{grandTotal}</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">100% من المسجلين</div>
+                    </div>
+                    <div className="bg-emerald-50/70 dark:bg-emerald-950/30 p-3 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/60">
+                      <div className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span> مستمر
+                      </div>
+                      <div className="text-xl sm:text-2xl font-black text-emerald-700 dark:text-emerald-400 font-mono mt-0.5">{activeTotal}</div>
+                      <div className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 mt-0.5">
+                        {grandTotal > 0 ? Math.round((activeTotal / grandTotal) * 100) : 0}%
+                      </div>
+                    </div>
+                    <div className="bg-amber-50/70 dark:bg-amber-950/30 p-3 rounded-2xl border border-amber-200/80 dark:border-amber-900/60">
+                      <div className="text-[11px] font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-amber-500"></span> منقول / وثيقة
+                      </div>
+                      <div className="text-xl sm:text-2xl font-black text-amber-700 dark:text-amber-400 font-mono mt-0.5">{transferredTotal}</div>
+                      <div className="text-[10px] text-amber-600/80 dark:text-amber-400/80 mt-0.5">
+                        {grandTotal > 0 ? Math.round((transferredTotal / grandTotal) * 100) : 0}%
+                      </div>
+                    </div>
+                    <div className="bg-rose-50/70 dark:bg-rose-950/30 p-3 rounded-2xl border border-rose-200/80 dark:border-rose-900/60">
+                      <div className="text-[11px] font-bold text-rose-800 dark:text-rose-300 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-rose-500"></span> تارك
+                      </div>
+                      <div className="text-xl sm:text-2xl font-black text-rose-700 dark:text-rose-400 font-mono mt-0.5">{leftTotal}</div>
+                      <div className="text-[10px] text-rose-600/80 dark:text-rose-400/80 mt-0.5">
+                        {grandTotal > 0 ? Math.round((leftTotal / grandTotal) * 100) : 0}%
+                      </div>
+                    </div>
+                    <div className="col-span-2 sm:col-span-1 bg-blue-50/70 dark:bg-blue-950/30 p-3 rounded-2xl border border-blue-200/80 dark:border-blue-900/60">
+                      <div className="text-[11px] font-bold text-blue-800 dark:text-blue-300 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-blue-500"></span> متخرج
+                      </div>
+                      <div className="text-xl sm:text-2xl font-black text-blue-700 dark:text-blue-400 font-mono mt-0.5">{graduatedTotal}</div>
+                      <div className="text-[10px] text-blue-600/80 dark:text-blue-400/80 mt-0.5">
+                        {grandTotal > 0 ? Math.round((graduatedTotal / grandTotal) * 100) : 0}%
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Recharts Graphical Visualizations */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* 1. Status Distribution Donut Chart */}
+                    <div className="p-4 bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex flex-col">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          <span>🥧</span> توزيع الطلاب حسب الحالة
+                        </h3>
+                        <span className="text-[10px] font-bold text-slate-400">مخطط دائري تفاعلي</span>
+                      </div>
+                      <div className="h-64 w-full flex items-center justify-center">
+                        {pieData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={pieData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={55}
+                                outerRadius={80}
+                                paddingAngle={3}
+                                dataKey="value"
+                              >
+                                {pieData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                              </Pie>
+                              <Tooltip 
+                                formatter={(value: any, name: any) => [`${value} طالب`, name]}
+                                contentStyle={{ 
+                                  direction: 'rtl', 
+                                  backgroundColor: '#1e293b', 
+                                  color: '#f8fafc', 
+                                  borderRadius: '12px', 
+                                  border: 'none', 
+                                  fontSize: '11px',
+                                  fontWeight: 'bold' 
+                                }}
+                              />
+                              <Legend 
+                                verticalAlign="bottom" 
+                                height={36} 
+                                formatter={(value) => <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mx-1">{value}</span>}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="text-xs text-slate-400 font-bold">لا توجد بيانات كافية للرسم</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 2. Registration Books Stacked Bar Chart */}
+                    <div className="p-4 bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex flex-col">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          <span>📊</span> توزيع الحالات حسب دفتر القيد
+                        </h3>
+                        <span className="text-[10px] font-bold text-slate-400">{barData.length} دفاتر قيد</span>
+                      </div>
+                      <div className="h-64 w-full flex items-center justify-center">
+                        {barData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                              <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 'bold' }} />
+                              <YAxis tick={{ fontSize: 10 }} />
+                              <Tooltip 
+                                formatter={(value: any, name: any) => [`${value} طالب`, name]}
+                                contentStyle={{ 
+                                  direction: 'rtl', 
+                                  backgroundColor: '#1e293b', 
+                                  color: '#f8fafc', 
+                                  borderRadius: '12px', 
+                                  border: 'none', 
+                                  fontSize: '11px',
+                                  fontWeight: 'bold' 
+                                }}
+                              />
+                              <Legend 
+                                verticalAlign="bottom" 
+                                height={36} 
+                                formatter={(value) => <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mx-1">{value}</span>}
+                              />
+                              <Bar dataKey="مستمر" fill="#10b981" stackId="a" />
+                              <Bar dataKey="منقول" fill="#f59e0b" stackId="a" />
+                              <Bar dataKey="تارك" fill="#ef4444" stackId="a" />
+                              <Bar dataKey="متخرج" fill="#3b82f6" stackId="a" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="text-xs text-slate-400 font-bold">لا توجد بيانات كافية للرسم</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Detailed Table Breakdown */}
+                  <div className="space-y-2">
+                    <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                      <span>📑</span> جدول تفاصيل القيود
+                    </h3>
+                    <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+                      <table className="w-full text-right border-collapse text-xs">
+                        <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold sticky top-0">
+                          <tr>
+                            <th className="p-3">رقم القيد</th>
+                            <th className="p-3 text-center">إجمالي الطلاب</th>
+                            <th className="p-3">تفصيل الحالات</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {regStats.length > 0 ? regStats.map((item) => (
+                            <tr key={item.reg} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                              <td className="p-3 font-bold text-slate-800 dark:text-slate-200 align-top">
+                                <span className={`${currentTheme.primary} text-white px-2.5 py-0.5 rounded-lg font-mono text-xs font-bold`}>
+                                  قيد {item.reg}
+                                </span>
+                              </td>
+                              <td className="p-3 font-black text-slate-900 dark:text-slate-100 text-center font-mono align-top">
+                                {item.total} طالب
+                              </td>
+                              <td className="p-3">
+                                <div className="flex flex-wrap gap-1.5 text-[10px] font-bold">
+                                  {item.active > 0 && (
+                                    <span className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                                      مستمر: {item.active} ({item.total > 0 ? Math.round((item.active / item.total) * 100) : 0}%)
+                                    </span>
+                                  )}
+                                  {item.transferred > 0 && (
+                                    <span className="bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800">
+                                      منقول: {item.transferred} ({item.total > 0 ? Math.round((item.transferred / item.total) * 100) : 0}%)
+                                    </span>
+                                  )}
+                                  {item.left > 0 && (
+                                    <span className="bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 px-2 py-0.5 rounded-lg border border-rose-200 dark:border-rose-800">
+                                      تارك: {item.left} ({item.total > 0 ? Math.round((item.left / item.total) * 100) : 0}%)
+                                    </span>
+                                  )}
+                                  {item.graduated > 0 && (
+                                    <span className="bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-lg border border-blue-200 dark:border-blue-800">
+                                      متخرج: {item.graduated} ({item.total > 0 ? Math.round((item.graduated / item.total) * 100) : 0}%)
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )) : (
+                            <tr>
+                              <td colSpan={3} className="p-4 text-center text-slate-400 font-bold">لا توجد بيانات متاحة</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <button 
+                  onClick={() => setView('list')} 
+                  className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold rounded-xl text-slate-700 dark:text-slate-200 text-xs transition-colors cursor-pointer"
+                >
+                  إغلاق الإحصائيات
+                </button>
+              </div>
+            </Modal>
+          );
+        })()}
 
         {/* Print Template Customization Modal */}
         {showPrintTemplateModal && (
