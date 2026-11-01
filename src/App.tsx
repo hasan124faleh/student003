@@ -11,7 +11,7 @@ import {
   AlertCircle, ArrowUp, RotateCcw, Info, Calendar, 
   ArrowLeft, Palette, Loader2, BarChart3, Moon, Sun, 
   Mic, Maximize2, Minimize2, WifiOff, Share2, 
-  MessageSquare, CheckSquare, Check, Filter,
+  MessageSquare, CheckSquare, Check, Filter, Copy,
   Sparkles, LayoutTemplate, LayoutGrid, List, Eye, Edit2, 
   GraduationCap, School, SlidersHorizontal, TrendingUp
 } from 'lucide-react';
@@ -64,6 +64,9 @@ export interface Student {
   docDestination?: string;   // الجهة الصادرة إليها
   docPurpose?: string;       // الغرض من الوثيقة
   transferGrade?: string;    // الصف الذي انتقل فيه
+  graduationYear?: string;   // العام الدراسي للتخرج
+  graduationRound?: string;  // الدور (الدور الأول، الثاني، الثالث، الخاص)
+  graduationGrade?: string;  // الصف (السادس العلمي، السادس الأدبي)
   notes?: string;
   isDeleted?: boolean;
   createdAt: number;
@@ -95,6 +98,9 @@ const exportToExcel = (students: Student[]) => {
     'الصف الذي انتقل فيه': s.transferGrade || '',
     'الجهة الصادرة إليها': s.docDestination || '',
     'الغرض من الوثيقة': s.docPurpose || '',
+    'العام الدراسي للتخرج': s.graduationYear || '',
+    'دور التخرج': s.graduationRound || '',
+    'صف / فرع التخرج': s.graduationGrade || '',
     'ملاحظات': s.notes || '',
     'تاريخ التسجيل': new Date(s.createdAt).toLocaleDateString('ar-EG')
   }));
@@ -1040,6 +1046,39 @@ const ModernAppLayout = ({
   const graduatedCount = useMemo(() => students.filter(s => !s.isDeleted && s.status === 'graduated').length, [students]);
   const totalCount = useMemo(() => students.filter(s => !s.isDeleted).length, [students]);
 
+  const [copiedStudentId, setCopiedStudentId] = useState<string | null>(null);
+
+  const handleCopyStudentName = (e: React.MouseEvent, student: Student) => {
+    e.stopPropagation();
+    const fullName = `${cleanName(student.firstName)}${student.lastName ? ' ' + student.lastName : ''}`.trim();
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(fullName).catch(() => {
+        fallbackCopyText(fullName);
+      });
+    } else {
+      fallbackCopyText(fullName);
+    }
+    setCopiedStudentId(student.id);
+    setTimeout(() => {
+      setCopiedStudentId(null);
+    }, 1500);
+  };
+
+  const fallbackCopyText = (text: string) => {
+    try {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <div className="space-y-4 animate-fade-in">
       {/* 1. Modern Hero Stats Cards */}
@@ -1376,7 +1415,7 @@ const ModernAppLayout = ({
 
       {/* 4. Modern Data Presentation */}
       {modernViewType === 'table' ? (
-        /* Modern Dense Table View */
+        /* Modern Table & Mobile List Container */
         <div className="glass-panel modern-card-shadow rounded-2xl border border-slate-200/90 dark:border-slate-800 overflow-hidden">
           <div className="p-3 bg-slate-50/70 dark:bg-slate-900/70 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
             <div className="flex items-center gap-2">
@@ -1392,8 +1431,150 @@ const ModernAppLayout = ({
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-right border-collapse">
+          {/* 4A. Dedicated Mobile Responsive List (< md) */}
+          <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+            {displayed.map((s, idx) => {
+              const isSelected = selectedStudents.includes(s.id);
+              const firstLetter = cleanName(s.firstName).charAt(0) || 'ط';
+              return (
+                <div 
+                  key={s.id}
+                  onClick={() => { setSelectedId(s.id); setView('detail'); }}
+                  className={`p-3 transition-colors cursor-pointer active:bg-blue-50/50 dark:active:bg-slate-800/50 ${
+                    isSelected ? 'bg-blue-50/40 dark:bg-blue-950/20' : ''
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                      {/* Checkbox and Sequence */}
+                      <div className="flex items-center gap-1.5 pt-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+                        <input 
+                          type="checkbox" 
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedStudents([...selectedStudents, s.id]);
+                            else setSelectedStudents(selectedStudents.filter(id => id !== s.id));
+                          }}
+                          className="rounded border-slate-300 cursor-pointer w-4 h-4"
+                        />
+                        <span className="font-mono text-xs font-bold text-slate-400 w-5 text-center">
+                          {idx + 1}
+                        </span>
+                      </div>
+
+                      {/* Initial Avatar */}
+                      <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-black text-xs flex items-center justify-center shrink-0 border border-slate-200/80 dark:border-slate-700 mt-0.5">
+                        {firstLetter}
+                      </div>
+
+                      {/* Name & Badges */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-black text-slate-800 dark:text-slate-100 text-sm leading-snug">
+                            {cleanName(s.firstName)}
+                          </span>
+                          {/* Small copy button */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleCopyStudentName(e, s)}
+                            className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
+                            title={copiedStudentId === s.id ? "تم النسخ!" : "نسخ اسم الطالب"}
+                          >
+                            {copiedStudentId === s.id ? (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.5 rounded">
+                                <Check size={11} /> تم النسخ
+                              </span>
+                            ) : (
+                              <Copy size={13} className="text-slate-400 hover:text-blue-600" />
+                            )}
+                          </button>
+                        </div>
+
+                        {s.lastName && (
+                          <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-0.5">
+                            اللقب: {s.lastName}
+                          </div>
+                        )}
+
+                        {/* Badges: Page and Reg number side-by-side without clipping */}
+                        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                          <span className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 px-2.5 py-0.5 rounded-lg font-mono font-bold text-xs">
+                            ص {s.pageNumber}
+                          </span>
+                          <span className={`${currentTheme.primary} text-white px-2.5 py-0.5 rounded-lg font-mono font-bold text-xs`}>
+                            قيد {s.regNumber}
+                          </span>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            s.status === 'graduated' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' :
+                            s.status === 'left' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' :
+                            s.status === 'transferred' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' :
+                            'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              s.status === 'graduated' ? 'bg-blue-600' :
+                              s.status === 'left' ? 'bg-rose-600' :
+                              s.status === 'transferred' ? 'bg-amber-600' :
+                              'bg-emerald-600'
+                            }`}></span>
+                            <span>
+                              {s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}
+                            </span>
+                          </span>
+                        </div>
+
+                        {/* Transferred info */}
+                        {s.status === 'transferred' && (s.docDestination || s.transferGrade) && (
+                          <div className="bg-amber-50/70 dark:bg-amber-950/30 p-1.5 rounded-lg text-[10px] text-amber-900 dark:text-amber-300 font-semibold mt-1.5 border border-amber-200/60 dark:border-amber-900/60">
+                            {s.docDestination && <span>الجهة: {s.docDestination}</span>}
+                            {s.docDestination && s.transferGrade && <span> • </span>}
+                            {s.transferGrade && <span>الصف: {s.transferGrade}</span>}
+                          </div>
+                        )}
+
+                        {/* Graduated info */}
+                        {s.status === 'graduated' && (s.graduationYear || s.graduationGrade || s.graduationRound) && (
+                          <div className="bg-blue-50/70 dark:bg-blue-950/30 p-1.5 rounded-lg text-[10px] text-blue-900 dark:text-blue-300 font-semibold mt-1.5 border border-blue-200/60 dark:border-blue-900/60">
+                            <span>🎓 {s.graduationGrade || 'السادس'}</span>
+                            {s.graduationRound && <span> • {s.graduationRound}</span>}
+                            {s.graduationYear && <span> • {s.graduationYear}</span>}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Quick Actions */}
+                    <div className="flex items-center gap-0.5 shrink-0 pt-0.5" onClick={e => e.stopPropagation()}>
+                      <button 
+                        onClick={() => { setSelectedId(s.id); setView('edit'); setSimilarStudents([]); }} 
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-slate-800 transition-colors"
+                        title="تعديل"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button 
+                        onClick={() => { setSelectedId(s.id); setPrintMode('single'); setTimeout(() => window.print(), 500); }} 
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 transition-colors"
+                        title="طباعة"
+                      >
+                        <Printer size={14} />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(s.id)} 
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-slate-800 transition-colors"
+                        title="حذف"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 4B. Desktop Table View (>= md) */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-right border-collapse min-w-[700px]">
               <thead className="bg-slate-100/70 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 text-[11px] font-bold border-b border-slate-200 dark:border-slate-700">
                 <tr>
                   <th className="p-2.5 w-10 text-center">
@@ -1448,8 +1629,25 @@ const ModernAppLayout = ({
                             {firstLetter}
                           </div>
                           <div>
-                            <div className="font-black text-slate-800 dark:text-slate-100 text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                              {cleanName(s.firstName)}
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-black text-slate-800 dark:text-slate-100 text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                {cleanName(s.firstName)}
+                              </span>
+                              {/* Small Copy Button */}
+                              <button
+                                type="button"
+                                onClick={(e) => handleCopyStudentName(e, s)}
+                                className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
+                                title={copiedStudentId === s.id ? "تم النسخ!" : "نسخ اسم الطالب"}
+                              >
+                                {copiedStudentId === s.id ? (
+                                  <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.5 rounded">
+                                    <Check size={11} /> منسوخ
+                                  </span>
+                                ) : (
+                                  <Copy size={13} className="text-slate-400 hover:text-blue-600" />
+                                )}
+                              </button>
                             </div>
                             {s.lastName && (
                               <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
@@ -1548,9 +1746,26 @@ const ModernAppLayout = ({
                       {firstLetter}
                     </div>
                     <div className="min-w-0">
-                      <h3 className="font-black text-slate-800 dark:text-slate-100 text-sm group-hover:text-blue-600 truncate transition-colors">
-                        {cleanName(s.firstName)}
-                      </h3>
+                      <div className="flex items-center gap-1.5">
+                        <h3 className="font-black text-slate-800 dark:text-slate-100 text-sm group-hover:text-blue-600 truncate transition-colors">
+                          {cleanName(s.firstName)}
+                        </h3>
+                        {/* Small Copy Button */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleCopyStudentName(e, s)}
+                          className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
+                          title={copiedStudentId === s.id ? "تم النسخ!" : "نسخ اسم الطالب"}
+                        >
+                          {copiedStudentId === s.id ? (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.5 rounded">
+                              <Check size={11} /> منسوخ
+                            </span>
+                          ) : (
+                            <Copy size={13} className="text-slate-400 hover:text-blue-600" />
+                          )}
+                        </button>
+                      </div>
                       {s.lastName && (
                         <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 truncate">
                           اللقب: {s.lastName}
@@ -1595,6 +1810,14 @@ const ModernAppLayout = ({
                   <div className="bg-amber-50/70 dark:bg-amber-950/30 p-2 rounded-xl text-[11px] text-amber-900 dark:text-amber-300 font-semibold mb-3 border border-amber-200/60 dark:border-amber-900/60">
                     {s.docDestination && <div>الجهة: {s.docDestination}</div>}
                     {s.transferGrade && <div>الصف: {s.transferGrade}</div>}
+                  </div>
+                )}
+
+                {/* Graduated summary if applicable */}
+                {s.status === 'graduated' && (s.graduationYear || s.graduationGrade || s.graduationRound) && (
+                  <div className="bg-blue-50/70 dark:bg-blue-950/30 p-2 rounded-xl text-[11px] text-blue-900 dark:text-blue-300 font-semibold mb-3 border border-blue-200/60 dark:border-blue-900/60">
+                    <div>🎓 التخرج: {s.graduationGrade || 'السادس'}{s.graduationRound ? ' • ' + s.graduationRound : ''}</div>
+                    {s.graduationYear && <div>العام الدراسي: {s.graduationYear}</div>}
                   </div>
                 )}
 
@@ -1754,6 +1977,20 @@ export default function App() {
   const [formTransferGrade, setFormTransferGrade] = useState<string>('');
   const [docPurposeType, setDocPurposeType] = useState<string>('إكمال الدراسة');
   const [customDocPurpose, setCustomDocPurpose] = useState<string>('');
+  const [formGraduationYear, setFormGraduationYear] = useState<string>('2024-2025');
+  const [formGraduationRound, setFormGraduationRound] = useState<string>('الدور الأول');
+  const [formGraduationGrade, setFormGraduationGrade] = useState<string>('السادس العلمي');
+  const [customGraduationYears, setCustomGraduationYears] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('graduationYears');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+    return ['2024-2025', '2023-2024', '2022-2023', '2021-2022', '2020-2021'];
+  });
+  const [showAddGradYearInput, setShowAddGradYearInput] = useState(false);
+  const [newGradYearInput, setNewGradYearInput] = useState('');
   const [customRegs, setCustomRegs] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('customRegs') || '[]'); } catch { return []; }
   });
@@ -2023,6 +2260,36 @@ export default function App() {
   }, [customRegs]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem('graduationYears', JSON.stringify(customGraduationYears));
+    } catch {
+      // ignore
+    }
+  }, [customGraduationYears]);
+
+  const allGraduationYears = useMemo(() => {
+    const set = new Set<string>(customGraduationYears);
+    students.forEach(s => {
+      if (s.graduationYear && s.graduationYear.trim()) {
+        set.add(s.graduationYear.trim());
+      }
+    });
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [customGraduationYears, students]);
+
+  const handleAddGraduationYear = (yearStr: string) => {
+    const trimmed = yearStr.trim();
+    if (!trimmed) return;
+    if (!customGraduationYears.includes(trimmed)) {
+      setCustomGraduationYears(prev => [trimmed, ...prev]);
+    }
+    setFormGraduationYear(trimmed);
+    setNewGradYearInput('');
+    setShowAddGradYearInput(false);
+    setAlertConfig({ message: `تمت إضافة وحفظ العام الدراسي ${trimmed} بنجاح`, type: 'success' });
+  };
+
+  useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
         if (entries[0].isIntersecting) setVisibleCount((prev) => prev + 50);
     }, { threshold: 0.1 });
@@ -2037,6 +2304,9 @@ export default function App() {
       if (student) {
         const initialGrade = (student.transferGrade || (student as any).grade || '').trim();
         setFormTransferGrade(initialGrade);
+        setFormGraduationYear(student.graduationYear || (allGraduationYears[0] || '2024-2025'));
+        setFormGraduationRound(student.graduationRound || 'الدور الأول');
+        setFormGraduationGrade(student.graduationGrade || 'السادس العلمي');
         setEditFormData({
           firstName: cleanName(student.firstName),
           lastName: student.lastName || '',
@@ -2047,6 +2317,9 @@ export default function App() {
           docDestination: student.docDestination || '',
           docPurpose: student.docPurpose || '',
           transferGrade: initialGrade,
+          graduationYear: student.graduationYear || '',
+          graduationRound: student.graduationRound || 'الدور الأول',
+          graduationGrade: student.graduationGrade || 'السادس العلمي',
           notes: student.notes || '',
           createdAt: formatDateForInput(student.createdAt)
         });
@@ -2063,10 +2336,13 @@ export default function App() {
     } else if (view === 'add') {
       setFormStatus('active');
       setFormTransferGrade('');
+      setFormGraduationYear(allGraduationYears[0] || '2024-2025');
+      setFormGraduationRound('الدور الأول');
+      setFormGraduationGrade('السادس العلمي');
       setDocPurposeType('إكمال الدراسة');
       setCustomDocPurpose('');
     }
-  }, [view, selectedId, students]);
+  }, [view, selectedId, students, allGraduationYears]);
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2295,6 +2571,10 @@ export default function App() {
         if (s.docDestination) text += `└ 🏛️ الجهة الصادرة إليها: ${s.docDestination}\n`;
         if (s.docPurpose) text += `└ 🎯 الغرض من الوثيقة: ${s.docPurpose}\n`;
       }
+
+      if (s.status === 'graduated' && (s.graduationYear || s.graduationGrade || s.graduationRound)) {
+        text += `└ 🎓 بيانات التخرج: ${s.graduationGrade || ''} - ${s.graduationRound || ''} - العام الدراسي: ${s.graduationYear || ''}\n`;
+      }
       
       if (s.notes) {
         text += `└ 📝 ملاحظات: ${s.notes}\n`;
@@ -2376,27 +2656,27 @@ export default function App() {
         )}
 
         <header className="bg-white/90 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-40 shadow-xs backdrop-blur-md">
-          <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-3 cursor-pointer select-none" onClick={() => setView('list')}>
-              <div className={`${currentTheme.primary} text-white p-2 rounded-xl shadow-md transition-all flex items-center justify-center`}>
-                <School size={20} />
+          <div className="max-w-7xl mx-auto px-2.5 sm:px-4 min-h-14 sm:min-h-16 py-1.5 sm:py-0 flex items-center justify-between gap-1.5 sm:gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 cursor-pointer select-none min-w-0 flex-1" onClick={() => setView('list')}>
+              <div className={`${currentTheme.primary} text-white p-1.5 sm:p-2 rounded-xl shadow-md transition-all flex items-center justify-center shrink-0`}>
+                <School size={18} className="sm:w-5 sm:h-5" />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="font-black text-base sm:text-lg text-slate-800 dark:text-slate-100 font-cairo leading-none">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <h1 className="font-black text-xs sm:text-base md:text-lg text-slate-800 dark:text-slate-100 font-cairo leading-tight truncate">
                     سجل القيد العام
                   </h1>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 hidden sm:inline-block">
+                  <span className="text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 hidden md:inline-block shrink-0">
                     {students.filter(s => !s.isDeleted).length} طالب
                   </span>
                 </div>
-                <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 dark:text-slate-400 leading-tight truncate max-w-[140px] xs:max-w-[200px] sm:max-w-none">
                   ثانوية الشهيد محمد عبدالعزيز الكنعان للبنين
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
               {/* زر التبديل بين التصميم الحديث والتصميم الكلاسيكي */}
               <button 
                 onClick={() => {
@@ -2404,60 +2684,62 @@ export default function App() {
                   setUiDesignMode(nextMode);
                   localStorage.setItem('uiDesignMode', nextMode);
                 }} 
-                data-tooltip={uiDesignMode === 'modern' ? 'التبديل إلى التصميم الكلاسيكي' : 'التبديل إلى التصميم الحديث ✨'}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
+                title={uiDesignMode === 'modern' ? 'التبديل إلى التصميم الكلاسيكي' : 'التبديل إلى التصميم الحديث ✨'}
+                className={`flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0 ${
                   uiDesignMode === 'modern' 
-                    ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-blue-500/25 ring-2 ring-blue-400/30 hover:brightness-110' 
+                    ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-blue-500/25 ring-1 sm:ring-2 ring-blue-400/30 hover:brightness-110' 
                     : 'bg-amber-100 text-amber-950 border border-amber-300 hover:bg-amber-200'
                 }`}
                 type="button"
               >
                 {uiDesignMode === 'modern' ? (
                   <>
-                    <Sparkles size={14} className="text-amber-300 animate-spin" style={{ animationDuration: '4s' }} />
-                    <span className="hidden xs:inline">التصميم الحديث</span>
-                    <span className="text-[10px] bg-white/20 px-1 py-0.5 rounded font-mono">✨</span>
+                    <Sparkles size={13} className="text-amber-300 animate-spin" style={{ animationDuration: '4s' }} />
+                    <span className="hidden sm:inline text-xs">التصميم الحديث</span>
+                    <span className="sm:hidden text-[10px]">الحديث</span>
+                    <span className="text-[9px] bg-white/20 px-1 py-0.2 rounded font-mono hidden xs:inline">✨</span>
                   </>
                 ) : (
                   <>
-                    <LayoutTemplate size={14} className="text-amber-800" />
-                    <span className="hidden xs:inline">التصميم الكلاسيكي</span>
-                    <span className="text-[10px] bg-amber-200/80 px-1 py-0.5 rounded text-amber-900 font-bold">🏛️</span>
+                    <LayoutTemplate size={13} className="text-amber-800" />
+                    <span className="hidden sm:inline text-xs">التصميم الكلاسيكي</span>
+                    <span className="sm:hidden text-[10px]">كلاسيكي</span>
+                    <span className="text-[9px] bg-amber-200/80 px-1 py-0.2 rounded text-amber-900 font-bold hidden xs:inline">🏛️</span>
                   </>
                 )}
               </button>
 
               <button 
                 onClick={toggleFullscreen} 
-                data-tooltip={isFullscreen ? 'خروج من ملء الشاشة' : 'وضع ملء الشاشة'}
-                className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                title={isFullscreen ? 'خروج من ملء الشاشة' : 'وضع ملء الشاشة'}
+                className="p-1.5 sm:p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors shrink-0"
                 type="button"
               >
-                {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
               </button>
               <button 
                 onClick={() => setShowThemeModal(true)} 
-                data-tooltip="تغيير ألوان التطبيق"
-                className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                title="تغيير ألوان التطبيق"
+                className="p-1.5 sm:p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors shrink-0"
                 type="button"
               >
-                <Palette size={18} />
+                <Palette size={16} />
               </button>
               <button 
                 onClick={() => setView('settings')} 
-                data-tooltip="الإعدادات"
-                className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                title="الإعدادات"
+                className="p-1.5 sm:p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors shrink-0"
                 type="button"
               >
-                <Settings size={18} />
+                <Settings size={16} />
               </button>
               <button 
                 onClick={() => setConfirmConfig({ title: "تسجيل خروج", message: "هل أنت متأكد من تسجيل الخروج؟", onConfirm: () => signOut(auth) })} 
-                data-tooltip="تسجيل الخروج"
-                className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition-colors"
+                title="تسجيل الخروج"
+                className="p-1.5 sm:p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition-colors shrink-0"
                 type="button"
               >
-                <LogOut size={18} />
+                <LogOut size={16} />
               </button>
             </div>
           </div>
@@ -3207,6 +3489,9 @@ export default function App() {
                         docDestination: st === 'transferred' ? String(form.get('docDestination') || '').trim() : '',
                         docPurpose: purpose,
                         transferGrade: st === 'transferred' ? (formTransferGrade || String(form.get('transferGrade') || '')).trim() : '',
+                        graduationYear: st === 'graduated' ? (formGraduationYear || String(form.get('graduationYear') || '')).trim() : '',
+                        graduationRound: st === 'graduated' ? (formGraduationRound || String(form.get('graduationRound') || '')).trim() : '',
+                        graduationGrade: st === 'graduated' ? (formGraduationGrade || String(form.get('graduationGrade') || '')).trim() : '',
                         isDeleted: false,
                         createdAt: view === 'edit' ? new Date(String(form.get('createdAt'))).getTime() : Date.now()
                     };
@@ -3226,6 +3511,9 @@ export default function App() {
                             (e.target as HTMLFormElement).reset();
                             setFormStatus('active');
                             setFormTransferGrade('');
+                            setFormGraduationYear(allGraduationYears[0] || '2024-2025');
+                            setFormGraduationRound('الدور الأول');
+                            setFormGraduationGrade('السادس العلمي');
                             setDocPurposeType('إكمال الدراسة');
                             setCustomDocPurpose('');
                             setSimilarStudents([]);
@@ -3490,6 +3778,167 @@ export default function App() {
                                />
                              </div>
                            )}
+                         </div>
+                       </div>
+                     </div>
+                   )}
+
+                   {/* الحقول الخاصة بالطالب المتخرج */}
+                   {formStatus === 'graduated' && (
+                     <div className="bg-blue-50/80 border-2 border-blue-300/80 rounded-2xl p-3.5 space-y-3 animate-slide-up shadow-xs">
+                       <div className="flex items-center justify-between border-b border-blue-200 pb-1.5">
+                         <div className="flex items-center gap-2 text-blue-900 font-bold text-xs">
+                           <GraduationCap size={16} className="text-blue-600" />
+                           <span>بيانات التخرج الرسمية</span>
+                         </div>
+                         <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md">
+                           خريج
+                         </span>
+                       </div>
+
+                       {/* 1. العام الدراسي مع إمكانية إضافة الأعوام الدراسية لأول مرة وحفظها */}
+                       <div>
+                         <div className="flex items-center justify-between mb-1">
+                           <label className="block text-[11px] font-bold text-blue-950">
+                             العام الدراسي:
+                           </label>
+                           {!showAddGradYearInput && (
+                             <button
+                               type="button"
+                               onClick={() => setShowAddGradYearInput(true)}
+                               className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer hover:underline"
+                             >
+                               <Plus size={12} />
+                               <span>إضافة عام دراسي جديد</span>
+                             </button>
+                           )}
+                         </div>
+
+                         {!showAddGradYearInput ? (
+                           <div className="flex items-center gap-2">
+                             <select 
+                               name="graduationYear" 
+                               value={formGraduationYear} 
+                               onChange={(e) => {
+                                 if (e.target.value === '__add_new__') {
+                                   setShowAddGradYearInput(true);
+                                 } else {
+                                   setFormGraduationYear(e.target.value);
+                                 }
+                               }} 
+                               className="flex-1 p-2.5 rounded-xl bg-white border border-blue-200 outline-none font-bold text-xs text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                             >
+                               <option value="">اختر العام الدراسي...</option>
+                               {allGraduationYears.map(year => (
+                                 <option key={year} value={year}>{year}</option>
+                               ))}
+                               <option value="__add_new__">+ إضافة عام دراسي جديد...</option>
+                             </select>
+                             <button
+                               type="button"
+                               onClick={() => setShowAddGradYearInput(true)}
+                               className="p-2.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-xl transition-colors cursor-pointer shrink-0"
+                               title="إضافة عام دراسي جديد للقائمة"
+                             >
+                               <Plus size={15} />
+                             </button>
+                           </div>
+                         ) : (
+                           <div className="flex items-center gap-1.5 animate-fade-in bg-white p-1 rounded-xl border border-blue-300 shadow-xs">
+                             <input 
+                               type="text"
+                               value={newGradYearInput}
+                               onChange={(e) => setNewGradYearInput(e.target.value)}
+                               onKeyDown={(e) => {
+                                 if (e.key === 'Enter') {
+                                   e.preventDefault();
+                                   if (newGradYearInput.trim()) {
+                                     handleAddGraduationYear(newGradYearInput.trim());
+                                   }
+                                 }
+                               }}
+                               placeholder="اكتب العام الدراسي (مثال: 2024-2025)"
+                               className="flex-1 px-2.5 py-1.5 text-xs font-bold outline-none text-slate-800"
+                               autoFocus
+                             />
+                             <button
+                               type="button"
+                               onClick={() => {
+                                 if (newGradYearInput.trim()) {
+                                   handleAddGraduationYear(newGradYearInput.trim());
+                                 }
+                               }}
+                               className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors cursor-pointer"
+                             >
+                               حفظ العام
+                             </button>
+                             <button
+                               type="button"
+                               onClick={() => {
+                                 setShowAddGradYearInput(false);
+                                 setNewGradYearInput('');
+                               }}
+                               className="px-2 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
+                             >
+                               إلغاء
+                             </button>
+                           </div>
+                         )}
+                       </div>
+
+                       {/* 2. حقل الدور: الدور الأول، الثاني، الثالث، الخاص */}
+                       <div>
+                         <label className="block text-[11px] font-bold text-blue-950 mb-1.5">
+                           الدور الامتحاني:
+                         </label>
+                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                           {[
+                             'الدور الأول',
+                             'الدور الثاني',
+                             'الدور الثالث',
+                             'الدور الخاص'
+                           ].map((round) => (
+                             <label key={round} className="cursor-pointer">
+                               <input 
+                                 type="radio" 
+                                 name="graduationRound" 
+                                 value={round} 
+                                 className="peer hidden" 
+                                 checked={formGraduationRound === round} 
+                                 onChange={() => setFormGraduationRound(round)} 
+                               />
+                               <div className="py-2 px-1 text-center rounded-xl border-2 border-blue-200 bg-white text-slate-700 font-bold text-xs peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 transition-all shadow-xs">
+                                 {round}
+                               </div>
+                             </label>
+                           ))}
+                         </div>
+                       </div>
+
+                       {/* 3. حقل الصف: السادس العلمي، السادس الأدبي */}
+                       <div>
+                         <label className="block text-[11px] font-bold text-blue-950 mb-1.5">
+                           الصف / الفرع:
+                         </label>
+                         <div className="grid grid-cols-2 gap-2">
+                           {[
+                             'السادس العلمي',
+                             'السادس الأدبي'
+                           ].map((grade) => (
+                             <label key={grade} className="cursor-pointer">
+                               <input 
+                                 type="radio" 
+                                 name="graduationGrade" 
+                                 value={grade} 
+                                 className="peer hidden" 
+                                 checked={formGraduationGrade === grade} 
+                                 onChange={() => setFormGraduationGrade(grade)} 
+                               />
+                               <div className="py-2 px-2 text-center rounded-xl border-2 border-blue-200 bg-white text-slate-700 font-bold text-xs peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 transition-all shadow-xs">
+                                 {grade}
+                               </div>
+                             </label>
+                           ))}
                          </div>
                        </div>
                      </div>
@@ -3842,6 +4291,16 @@ export default function App() {
                             </div>
                           </div>
                         )}
+                        {s.status === 'graduated' && (s.graduationYear || s.graduationGrade || s.graduationRound) && (
+                          <div className="share-detail-item col-span-2 bg-blue-50/80 p-2.5 rounded-xl border border-blue-200 mt-1">
+                            <div className="text-[11px] font-bold text-blue-900 mb-1">🎓 بيانات التخرج:</div>
+                            <div className="grid grid-cols-3 gap-1 text-[11px] text-slate-800">
+                              {s.graduationYear && <div>📅 العام: <span className="font-bold">{s.graduationYear}</span></div>}
+                              {s.graduationRound && <div>📋 الدور: <span className="font-bold">{s.graduationRound}</span></div>}
+                              {s.graduationGrade && <div>🎒 الصف: <span className="font-bold">{s.graduationGrade}</span></div>}
+                            </div>
+                          </div>
+                        )}
                         {s.notes && (
                           <div className="share-detail-item col-span-2">
                             <span className="share-detail-label">📝 ملاحظات:</span>
@@ -4191,6 +4650,32 @@ export default function App() {
                           </div>
                         )}
 
+                        {/* بيانات التخرج */}
+                        {(s.status === 'graduated' || s.graduationYear || s.graduationGrade || s.graduationRound) && (
+                          <div className="pt-3 border-t border-slate-200">
+                            <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-3.5 space-y-2.5">
+                              <div className="text-xs font-bold text-blue-900 flex items-center gap-1.5 border-b border-blue-200 pb-1.5">
+                                <GraduationCap size={15} className="text-blue-600" />
+                                <span>بيانات التخرج الرسمية</span>
+                              </div>
+                              <div className="grid grid-cols-3 gap-2 text-xs">
+                                <div>
+                                  <span className="text-[10px] font-bold text-blue-800 block">العام الدراسي:</span>
+                                  <span className="font-bold text-slate-800 font-mono">{s.graduationYear || '—'}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] font-bold text-blue-800 block">الدور:</span>
+                                  <span className="font-bold text-slate-800">{s.graduationRound || '—'}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] font-bold text-blue-800 block">الصف / الفرع:</span>
+                                  <span className="font-bold text-slate-800">{s.graduationGrade || '—'}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         {s.notes && (
                             <div className="pt-3 border-t border-slate-200">
                                 <div className="text-[10px] font-bold text-slate-400 mb-1">ملاحظات</div>
@@ -4222,6 +4707,9 @@ export default function App() {
                           onClick={() => { 
                             const currentGrade = (s.transferGrade || (s as any).grade || '').trim();
                             setFormTransferGrade(currentGrade);
+                            setFormGraduationYear(s.graduationYear || (allGraduationYears[0] || '2024-2025'));
+                            setFormGraduationRound(s.graduationRound || 'الدور الأول');
+                            setFormGraduationGrade(s.graduationGrade || 'السادس العلمي');
                             setFormStatus(s.status || 'active');
                             setEditFormData({
                               firstName: cleanName(s.firstName),
@@ -4233,6 +4721,9 @@ export default function App() {
                               docDestination: s.docDestination || '',
                               docPurpose: s.docPurpose || '',
                               transferGrade: currentGrade,
+                              graduationYear: s.graduationYear || '',
+                              graduationRound: s.graduationRound || 'الدور الأول',
+                              graduationGrade: s.graduationGrade || 'السادس العلمي',
                               notes: s.notes || '',
                               createdAt: formatDateForInput(s.createdAt)
                             });
