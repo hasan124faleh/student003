@@ -89,9 +89,48 @@ export interface Student {
 // ==========================================
 // UTILS
 // ==========================================
+const ALEF_MAKSURA_NAMES = new Set([
+    'مصطفى', 'المصطفى', 'مرتضى', 'المرتضى', 'مجتبى', 'المجتبى', 'مقتدى', 'المقتدى',
+    'موسى', 'الموسى', 'عيسى', 'العيسى', 'يحيى', 'اليحيى', 'رضى', 'علا',
+    'هدى', 'سلوى', 'ليلى', 'نجوى', 'ضحى', 'منى', 'ندى', 'نهى', 'تقوى',
+    'بشرى', 'ذكرى', 'شذى', 'ربى', 'سجى', 'أروى', 'اروى', 'يسرى', 'لبنى',
+    'أعلى', 'اعلى', 'الأعلى', 'الاعلى', 'أولى', 'اولى', 'الأولى', 'الاولى',
+    'أخرى', 'اخرى', 'أدنى', 'ادنى', 'أقصى', 'اقصى', 'الوسطى', 'الكبرى',
+    'الصغرى', 'العظمى', 'الحسنى', 'المثلى', 'الهدى', 'إلى', 'الى', 'حتى', 'متى',
+    'لدى', 'سوى', 'مستشفى', 'معنى', 'مبنى', 'مستوى', 'مرمى', 'مجرى', 'مسعى'
+]);
+
+const restoreYehDots = (text?: string): string => {
+    if (!text) return "";
+    if (!text.includes('ى')) return text;
+    return text
+        .split(/(\s+)/)
+        .map(part => {
+            if (!part || !part.includes('ى')) return part;
+            const bare = part.replace(/[\u064B-\u065F\u0670\u0640]/g, '');
+            if (ALEF_MAKSURA_NAMES.has(bare)) return part;
+            if (
+                bare.endsWith('مصطفى') ||
+                bare.endsWith('مرتضى') ||
+                bare.endsWith('مجتبى') ||
+                bare.endsWith('مقتدى') ||
+                bare.endsWith('موسى') ||
+                bare.endsWith('عيسى') ||
+                bare.endsWith('يحيى') ||
+                bare.endsWith('اعلى') ||
+                bare.endsWith('أعلى') ||
+                bare.endsWith('الهدى')
+            ) {
+                return part;
+            }
+            return part.replace(/ى/g, 'ي');
+        })
+        .join('');
+};
+
 const cleanName = (name?: string) => {
     if (!name) return "";
-    return name.replace(/\s+\d+$/, '').trim();
+    return restoreYehDots(name.replace(/\s+\d+$/, '').trim());
 };
 
 let _measureCtx: CanvasRenderingContext2D | null = null;
@@ -1496,7 +1535,7 @@ const ModernAppLayout = ({
 
   const handleCopyStudentName = (e: React.MouseEvent, student: Student) => {
     e.stopPropagation();
-    const fullName = `${cleanName(student.firstName)}${student.lastName ? ' ' + student.lastName : ''}`.trim();
+    const fullName = `${cleanName(student.firstName)}${student.lastName ? ' ' + restoreYehDots(student.lastName) : ''}`.trim();
     if (navigator?.clipboard?.writeText) {
       navigator.clipboard.writeText(fullName).catch(() => {
         fallbackCopyText(fullName);
@@ -1765,22 +1804,22 @@ const ModernAppLayout = ({
 
           {/* Primary Action Toolbar (Hidden in Search Mode to show more names) */}
           {!inSearchMode && (
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
+            <div className="flex flex-wrap sm:flex-nowrap items-center justify-between sm:justify-start gap-1 sm:gap-2 shrink-0">
               <button 
                 onClick={() => { setSelectedId(null); setView('add'); setSimilarStudents([]); }} 
-                className={`flex-1 sm:flex-initial px-3.5 py-2 ${currentTheme.primary} ${currentTheme.hover} text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer`}
+                className={`h-8 sm:h-9 px-2.5 sm:px-3.5 ${currentTheme.primary} ${currentTheme.hover} text-white rounded-xl text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0`}
                 title="إضافة طالب جديد (Ctrl+N)"
               >
-                <Plus size={16} />
+                <Plus size={14} className="shrink-0" />
                 <span>طالب جديد</span>
               </button>
 
               <button 
                 onClick={() => setShowPrintModal(true)} 
-                className="px-3.5 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs transition-colors cursor-pointer"
+                className="h-8 sm:h-9 px-2.5 sm:px-3.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs transition-colors cursor-pointer whitespace-nowrap shrink-0"
                 title="طباعة السجل (Ctrl+P)"
               >
-                <Printer size={16} className="text-blue-600 dark:text-blue-400" />
+                <Printer size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
                 <span>طباعة</span>
               </button>
 
@@ -1788,52 +1827,53 @@ const ModernAppLayout = ({
               <button 
                 type="button"
                 onClick={() => setShowSearchFilters(prev => !prev)} 
-                className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                className={`h-8 sm:h-9 px-2.5 sm:px-3 rounded-xl text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 border transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                   showSearchFilters || selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL'
                     ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 shadow-xs'
                     : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
                 }`}
                 title={showSearchFilters ? "إخفاء الفلاتر لعرض المزيد من الأسماء" : "إظهار الفلاتر"}
               >
-                <Filter size={15} />
-                <span>{showSearchFilters ? 'إخفاء الفلاتر' : 'فلاتر'}</span>
+                <Filter size={14} className="shrink-0" />
+                <span className="hidden sm:inline">{showSearchFilters ? 'إخفاء الفلاتر' : 'فلاتر'}</span>
+                <span className="sm:hidden">فلاتر</span>
                 {(selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL') && (
-                  <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0"></span>
                 )}
               </button>
 
               {/* View Mode Switcher: Table vs Cards */}
-              <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+              <div className="h-8 sm:h-9 flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 sm:p-1 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
                 <button 
                   onClick={() => setModernViewType('table')} 
-                  className={`p-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                  className={`h-full px-1.5 sm:p-1.5 rounded-lg text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
                     modernViewType === 'table' 
                       ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs' 
                       : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
                   }`}
                   title="عرض الجدول"
                 >
-                  <List size={15} />
+                  <List size={14} />
                 </button>
                 <button 
                   onClick={() => setModernViewType('grid')} 
-                  className={`p-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                  className={`h-full px-1.5 sm:p-1.5 rounded-lg text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
                     modernViewType === 'grid' 
                       ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs' 
                       : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
                   }`}
                   title="عرض البطاقات"
                 >
-                  <LayoutGrid size={15} />
+                  <LayoutGrid size={14} />
                 </button>
               </div>
 
               <button 
                 onClick={() => setShowPrintTemplateModal(true)} 
-                className="p-2 bg-white dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs transition-colors cursor-pointer"
+                className="h-8 w-8 sm:h-9 sm:w-9 flex items-center justify-center bg-white dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs transition-colors cursor-pointer shrink-0"
                 title="تخصيص أعمدة الطباعة"
               >
-                <SlidersHorizontal size={16} />
+                <SlidersHorizontal size={15} />
               </button>
             </div>
           )}
@@ -2010,22 +2050,23 @@ const ModernAppLayout = ({
                     {/* Line 1: 100% Full-Width Single-Line Student Name + Inline Blue Surname */}
                     <div className="w-full min-w-0 mb-2 overflow-hidden">
                       {(() => {
-                        const displayFull = `#${idx + 1} ${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`;
+                        const surname = restoreYehDots(s.lastName);
+                        const displayFull = `#${idx + 1} ${cleanName(s.firstName)}${surname ? ` (${surname})` : ''}`;
                         const availWidth = Math.max(210, viewportWidth - 84);
                         const fittedFontSize = getSingleLineFontSize(displayFull, availWidth, 14, 7.5, 700);
                         return (
                           <div
-                            className="font-bold text-slate-900 dark:text-slate-100 leading-snug whitespace-nowrap overflow-hidden"
+                            className="font-bold text-slate-900 dark:text-slate-100 leading-relaxed py-0.5 whitespace-nowrap overflow-hidden"
                             style={{ fontSize: `${fittedFontSize}px` }}
-                            title={`${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`}
+                            title={`${cleanName(s.firstName)}${surname ? ` (${surname})` : ''}`}
                           >
                             <span className="font-mono tabular-nums text-[0.82em] font-bold text-slate-400 ml-1">
                               #{idx + 1}
                             </span>
                             <span>{cleanName(s.firstName)}</span>
-                            {s.lastName && (
+                            {surname && (
                               <span className="text-blue-600 dark:text-blue-400 font-bold mr-1">
-                                ({s.lastName})
+                                ({surname})
                               </span>
                             )}
                           </div>
@@ -2279,13 +2320,13 @@ const ModernAppLayout = ({
                             </div>
                             <div className="flex items-center gap-1.5 flex-nowrap min-w-0">
                               <span
-                                className="font-bold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors whitespace-nowrap"
-                                style={{ fontSize: `${getSingleLineFontSize(`${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`, 320, 14, 10, 700)}px` }}
+                                className="font-bold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors whitespace-nowrap leading-relaxed py-0.5"
+                                style={{ fontSize: `${getSingleLineFontSize(`${cleanName(s.firstName)}${s.lastName ? ` (${restoreYehDots(s.lastName)})` : ''}`, 320, 14, 10, 700)}px` }}
                               >
                                 {cleanName(s.firstName)}
                                 {s.lastName && (
                                   <span className="text-blue-600 dark:text-blue-400 font-bold mr-1">
-                                    ({s.lastName})
+                                    ({restoreYehDots(s.lastName)})
                                   </span>
                                 )}
                               </span>
@@ -2477,14 +2518,14 @@ const ModernAppLayout = ({
                   {/* Full-Width Single-Line Student Name + Inline Blue Surname */}
                   <div className="mb-2.5 w-full min-w-0">
                     <h3
-                      className="font-bold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 leading-snug transition-colors whitespace-nowrap"
-                      style={{ fontSize: `${getSingleLineFontSize(`${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`, 280, 14, 8, 700)}px` }}
-                      title={`${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`}
+                      className="font-bold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 leading-relaxed py-0.5 transition-colors whitespace-nowrap overflow-hidden"
+                      style={{ fontSize: `${getSingleLineFontSize(`${cleanName(s.firstName)}${s.lastName ? ` (${restoreYehDots(s.lastName)})` : ''}`, 280, 14, 8, 700)}px` }}
+                      title={`${cleanName(s.firstName)}${s.lastName ? ` (${restoreYehDots(s.lastName)})` : ''}`}
                     >
                       <span>{cleanName(s.firstName)}</span>
                       {s.lastName && (
                         <span className="text-blue-600 dark:text-blue-400 font-bold mr-1">
-                          ({s.lastName})
+                          ({restoreYehDots(s.lastName)})
                         </span>
                       )}
                     </h3>
@@ -3680,7 +3721,8 @@ export default function App() {
                           {/* Mobile Responsive Cards (< md): Full-width single-line name + blue surname + compact badges & actions */}
                           <div className="md:hidden space-y-2.5">
                             {trashItems.map((s, idx) => {
-                              const displayFull = `#${idx + 1} ${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`;
+                              const surname = restoreYehDots(s.lastName);
+                              const displayFull = `#${idx + 1} ${cleanName(s.firstName)}${surname ? ` (${surname})` : ''}`;
                               const availWidth = Math.max(210, appViewportWidth - 64);
                               const fittedFontSize = getSingleLineFontSize(displayFull, availWidth, 14, 7.5, 700);
                               return (
@@ -3690,17 +3732,17 @@ export default function App() {
                                 >
                                   {/* Line 1: 100% Full-Width Single-Line Name + Inline Blue Surname */}
                                   <div
-                                    className="w-full min-w-0 font-bold text-slate-900 dark:text-slate-100 leading-snug whitespace-nowrap overflow-hidden"
+                                    className="w-full min-w-0 font-bold text-slate-900 dark:text-slate-100 leading-relaxed py-0.5 whitespace-nowrap overflow-hidden"
                                     style={{ fontSize: `${fittedFontSize}px` }}
-                                    title={`${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`}
+                                    title={`${cleanName(s.firstName)}${surname ? ` (${surname})` : ''}`}
                                   >
                                     <span className="font-mono tabular-nums text-[0.82em] font-bold text-slate-400 ml-1">
                                       #{idx + 1}
                                     </span>
                                     <span>{cleanName(s.firstName)}</span>
-                                    {s.lastName && (
+                                    {surname && (
                                       <span className="text-blue-600 dark:text-blue-400 font-bold mr-1">
-                                        ({s.lastName})
+                                        ({surname})
                                       </span>
                                     )}
                                   </div>
@@ -3781,7 +3823,7 @@ export default function App() {
                                       <span>{cleanName(s.firstName)}</span>
                                       {s.lastName && (
                                         <span className="text-blue-600 dark:text-blue-400 font-bold mr-1.5">
-                                          ({s.lastName})
+                                          ({restoreYehDots(s.lastName)})
                                         </span>
                                       )}
                                     </td>
@@ -6147,7 +6189,7 @@ export default function App() {
                           <span>{cleanName(s.firstName)}</span>
                           {s.lastName && (
                             <span className="text-blue-600 dark:text-blue-400 font-bold mr-1.5">
-                              ({s.lastName})
+                              ({restoreYehDots(s.lastName)})
                             </span>
                           )}
                         </h1>
