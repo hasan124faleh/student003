@@ -60,6 +60,8 @@ html, body {
       color: black !important;
       overflow: visible !important;
       height: auto !important;
+      position: static !important;
+      top: auto !important;
   }
 
   body.print-landscape {
@@ -189,6 +191,7 @@ html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: #3
   display: flex;
   align-items: center;
   justify-content: center;
+  overscroll-behavior: contain;
 }
 
 .section-header {

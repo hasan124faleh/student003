@@ -93,6 +93,80 @@ const cleanName = (name?: string) => {
     return name.replace(/\s+\d+$/, '').trim();
 };
 
+const normalizeArabicSearch = (text?: string): string => {
+    if (!text) return '';
+    return text
+        .toLowerCase()
+        .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+        .replace(/[أإآٱ]/g, 'ا')
+        .replace(/ة/g, 'ه')
+        .replace(/ى/g, 'ي')
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
+const arCollator = new Intl.Collator('ar');
+
+const prepareArabicQuery = (rawQuery: string) => {
+    const normQuery = normalizeArabicSearch(rawQuery);
+    const normQueryNoSpace = normQuery.replace(/\s+/g, '');
+    const queryTokens = normQuery ? normQuery.split(' ').filter(Boolean) : [];
+    return { normQuery, normQueryNoSpace, queryTokens };
+};
+
+const getStudentSearchRankFast = (
+    entry: { normFull: string; normFullNoSpace: string },
+    prepared: { normQuery: string; normQueryNoSpace: string; queryTokens: string[] }
+): number => {
+    const { normQuery, normQueryNoSpace, queryTokens } = prepared;
+    if (!normQueryNoSpace) return 0;
+
+    const { normFull, normFullNoSpace } = entry;
+
+    // 1. تطابق في بداية الاسم (مع المسافات أو كاسم مركب بدون مسافات مثل محمدعلي <-> محمد علي)
+    if (normFull.startsWith(normQuery)) return 0;
+    if (normFullNoSpace.startsWith(normQueryNoSpace)) return 1;
+
+    // 2. تطابق صريح داخل الاسم (مع أو بدون مسافات للأسماء المركبة)
+    const directIdx = normFull.indexOf(normQuery);
+    if (directIdx !== -1) return 10 + directIdx;
+
+    const noSpaceIdx = normFullNoSpace.indexOf(normQueryNoSpace);
+    if (noSpaceIdx !== -1) return 100 + noSpaceIdx;
+
+    // 3. تطابق جميع مقاطع البحث بالترتيب (حتى مع اختلاف المسافات أو وجود أسماء فاصلة)
+    if (queryTokens.length > 1) {
+        let cursor = 0;
+        let firstIdx = -1;
+        let allMatchedInOrder = true;
+        for (let i = 0; i < queryTokens.length; i++) {
+            const token = queryTokens[i];
+            const foundAt = normFullNoSpace.indexOf(token, cursor);
+            if (foundAt === -1) {
+                allMatchedInOrder = false;
+                break;
+            }
+            if (firstIdx === -1) firstIdx = foundAt;
+            cursor = foundAt + token.length;
+        }
+        if (allMatchedInOrder) {
+            return 1000 + firstIdx;
+        }
+    }
+
+    return -1;
+};
+
+const getStudentSearchRank = (student: Student, rawQuery: string): number => {
+    const prepared = prepareArabicQuery(rawQuery);
+    if (!prepared.normQueryNoSpace) return 0;
+    const normFull = normalizeArabicSearch(`${cleanName(student.firstName)} ${student.lastName || ''}`);
+    return getStudentSearchRankFast(
+        { normFull, normFullNoSpace: normFull.replace(/\s+/g, '') },
+        prepared
+    );
+};
+
 const formatDateForInput = (timestamp?: number) => {
     if (!timestamp) return new Date().toISOString().split('T')[0];
     return new Date(timestamp).toISOString().split('T')[0];
@@ -197,28 +271,106 @@ const SkeletonLoader = () => (
   </div>
 );
 
-const Modal = ({ children, onClose, zIndex = "z-50", maxWidth = "max-w-lg" }: { children: React.ReactNode; onClose: () => void; zIndex?: string; maxWidth?: string }) => (
-  <div 
-    className={`fixed inset-0 bg-slate-900/60 ${zIndex} flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm overflow-y-auto modal-overlay`} 
-    onClick={onClose}
-    style={{ left: 0, top: 0, right: 0, bottom: 0, width: '100%', minHeight: '100%' }}
-  >
+let activeModalCount = 0;
+let lockedScrollY = 0;
+let prevHtmlOverflow = '';
+let prevHtmlOverscroll = '';
+let prevBodyPosition = '';
+let prevBodyTop = '';
+let prevBodyLeft = '';
+let prevBodyRight = '';
+let prevBodyWidth = '';
+let prevBodyOverflow = '';
+let prevBodyPaddingRight = '';
+let prevFullscreenOverflow = '';
+
+const lockBackgroundScroll = () => {
+  if (activeModalCount === 0) {
+    lockedScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+    const scrollbarWidth = Math.max(0, window.innerWidth - document.documentElement.clientWidth);
+
+    prevHtmlOverflow = document.documentElement.style.overflow;
+    prevHtmlOverscroll = document.documentElement.style.overscrollBehavior;
+    prevBodyPosition = document.body.style.position;
+    prevBodyTop = document.body.style.top;
+    prevBodyLeft = document.body.style.left;
+    prevBodyRight = document.body.style.right;
+    prevBodyWidth = document.body.style.width;
+    prevBodyOverflow = document.body.style.overflow;
+    prevBodyPaddingRight = document.body.style.paddingRight;
+
+    document.documentElement.style.overflow = 'hidden';
+    document.documentElement.style.overscrollBehavior = 'none';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${lockedScrollY}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
+    document.body.style.overflow = 'hidden';
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
+    const fsEl = document.querySelector('.fullscreen-mode') as HTMLElement | null;
+    if (fsEl) {
+      prevFullscreenOverflow = fsEl.style.overflowY;
+      fsEl.style.overflowY = 'hidden';
+    }
+  }
+  activeModalCount += 1;
+};
+
+const unlockBackgroundScroll = () => {
+  activeModalCount = Math.max(0, activeModalCount - 1);
+  if (activeModalCount === 0) {
+    document.documentElement.style.overflow = prevHtmlOverflow;
+    document.documentElement.style.overscrollBehavior = prevHtmlOverscroll;
+    document.body.style.position = prevBodyPosition;
+    document.body.style.top = prevBodyTop;
+    document.body.style.left = prevBodyLeft;
+    document.body.style.right = prevBodyRight;
+    document.body.style.width = prevBodyWidth;
+    document.body.style.overflow = prevBodyOverflow;
+    document.body.style.paddingRight = prevBodyPaddingRight;
+
+    const fsEl = document.querySelector('.fullscreen-mode') as HTMLElement | null;
+    if (fsEl) {
+      fsEl.style.overflowY = prevFullscreenOverflow;
+    }
+
+    window.scrollTo(0, lockedScrollY);
+  }
+};
+
+const Modal = ({ children, onClose, zIndex = "z-50", maxWidth = "max-w-lg" }: { children: React.ReactNode; onClose: () => void; zIndex?: string; maxWidth?: string }) => {
+  useEffect(() => {
+    lockBackgroundScroll();
+    return () => unlockBackgroundScroll();
+  }, []);
+
+  return (
     <div 
-      className={`w-full ${maxWidth} relative my-auto mx-auto`} 
-      onClick={e => e.stopPropagation()}
+      className={`fixed inset-0 bg-slate-900/60 ${zIndex} flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm overflow-y-auto overscroll-contain modal-overlay`} 
+      onClick={onClose}
+      style={{ left: 0, top: 0, right: 0, bottom: 0, width: '100%', height: '100dvh' }}
     >
-        <button 
-            onClick={onClose} 
-            className="absolute top-2.5 left-2.5 p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full shadow-md transition-all z-[60]"
-            title="إغلاق"
-            type="button"
-        >
-            <X size={18} />
-        </button>
-        {children}
+      <div 
+        className={`w-full ${maxWidth} relative my-auto mx-auto`} 
+        onClick={e => e.stopPropagation()}
+      >
+          <button 
+              onClick={onClose} 
+              className="absolute top-2.5 left-2.5 p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full shadow-md transition-all z-[60]"
+              title="إغلاق"
+              type="button"
+          >
+              <X size={18} />
+          </button>
+          {children}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const AlertModal = ({ message, type, onClose }: { message: string; type: 'error' | 'success' | 'warning'; onClose: () => void }) => (
   <Modal onClose={onClose} zIndex="z-[60]">
@@ -993,7 +1145,7 @@ interface ModernAppLayoutProps {
   setSelectedId: (id: string | null) => void;
   setView: (v: 'list' | 'add' | 'edit' | 'detail' | 'trash' | 'settings' | 'stats') => void;
   setSimilarStudents: (s: Student[]) => void;
-  setPrintMode: (m: 'list' | 'single' | 'selected' | 'docsExport') => void;
+  setPrintMode: (m: 'none' | 'list' | 'single' | 'selected' | 'docsExport') => void;
   setShowPrintModal: (b: boolean) => void;
   setShowPrintTemplateModal: (b: boolean) => void;
   setShowPrintSelectedModal: (b: boolean) => void;
@@ -1268,6 +1420,11 @@ const ModernAppLayout = ({
             <Search className="text-slate-400 ml-2 shrink-0" size={17} />
             <input 
               ref={searchInputRef}
+              type="text"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
               className="flex-1 bg-transparent outline-none text-slate-800 dark:text-slate-100 font-bold text-xs sm:text-sm placeholder:text-slate-400 min-w-0"
               placeholder="ابحث باسم الطالب أو اللقب..."
               value={search}
@@ -2130,19 +2287,19 @@ export default function App() {
   const [view, setView] = useState<'list' | 'add' | 'edit' | 'detail' | 'trash' | 'settings' | 'stats'>('list');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState(''); 
+  const debouncedQuery = search;
   const [selectedRegFilter, setSelectedRegFilter] = useState(''); 
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState('recent');
   const [yearFilter, setYearFilter] = useState('ALL');
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [printRegInput, setPrintRegInput] = useState('');
-  const [visibleCount, setVisibleCount] = useState(150);
+  const [visibleCount, setVisibleCount] = useState(40);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
-  const [printMode, setPrintMode] = useState<'list' | 'single' | 'selected' | 'docsExport'>('list');
+  const [printMode, setPrintMode] = useState<'none' | 'list' | 'single' | 'selected' | 'docsExport'>('none');
   const [listOrientation, setListOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [docsExportYear, setDocsExportYear] = useState<string>('ALL');
   const [docsExportSort, setDocsExportSort] = useState<'byDate' | 'alphabetical' | 'byGradeAlpha'>('byDate');
@@ -2208,25 +2365,37 @@ export default function App() {
   const inSearchMode = isSearchActive || search.trim().length > 0;
   const currentTheme = themeColors[colorTheme] || themeColors.slate;
 
-  // Group students by first letter for display only
+  // Pre-compute normalized Arabic names once whenever students change for instant 0ms search
+  const studentSearchIndex = useMemo(() => {
+    const map = new Map<string, { normFull: string; normFullNoSpace: string }>();
+    for (let i = 0; i < students.length; i++) {
+      const s = students[i];
+      const normFull = normalizeArabicSearch(`${cleanName(s.firstName)} ${s.lastName || ''}`);
+      map.set(s.id, {
+        normFull,
+        normFullNoSpace: normFull.replace(/\s+/g, '')
+      });
+    }
+    return map;
+  }, [students]);
+
+  // Group students by first letter for display only when alphabetical rail is visible
   const filteredForGroups = useMemo(() => {
+    if (sortBy !== 'alphabetical' || debouncedQuery.trim().length > 0) return [];
     let res = students.filter(s => view === 'trash' ? s.isDeleted : !s.isDeleted);
     if (selectedRegFilter) res = res.filter(s => s.regNumber === selectedRegFilter);
     if (yearFilter !== 'ALL') res = res.filter(s => new Date(s.createdAt).getFullYear().toString() === yearFilter);
     if (statusFilter !== 'ALL') res = res.filter(s => (s.status || 'active') === statusFilter);
-    if (debouncedQuery) {
-       const q = debouncedQuery.toLowerCase();
-       res = res.filter(s => `${s.firstName} ${s.lastName || ''}`.toLowerCase().includes(q));
-    }
     return res;
-  }, [students, view, selectedRegFilter, yearFilter, statusFilter, debouncedQuery]);
+  }, [students, view, selectedRegFilter, yearFilter, statusFilter, sortBy, debouncedQuery]);
   
   const studentsByLetter = useMemo(() => {
+    if (filteredForGroups.length === 0) return {};
     const groups: Record<string, Student[]> = {};
-    const sorted = [...filteredForGroups].sort((a, b) => a.firstName.localeCompare(b.firstName));
+    const sorted = [...filteredForGroups].sort((a, b) => arCollator.compare(a.firstName, b.firstName));
     
     sorted.forEach(student => {
-      const firstChar = student.firstName.charAt(0);
+      const firstChar = cleanName(student.firstName).charAt(0) || student.firstName.charAt(0);
       if (!groups[firstChar]) {
         groups[firstChar] = [];
       }
@@ -2237,7 +2406,9 @@ export default function App() {
   }, [filteredForGroups]);
 
   const alphabetLetters = useMemo(() => {
-    return Object.keys(studentsByLetter).sort((a,b) => a.localeCompare(b));
+    const keys = Object.keys(studentsByLetter);
+    if (keys.length === 0) return [];
+    return keys.sort((a, b) => arCollator.compare(a, b));
   }, [studentsByLetter]);
 
   // Keyboard shortcuts
@@ -2434,10 +2605,29 @@ export default function App() {
     return () => unsubscribe();
   }, [user]);
 
+  const isTrashView = view === 'trash';
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedQuery(search), 300);
-    return () => clearTimeout(timer);
+    setVisibleCount(40);
+  }, [search, selectedRegFilter, statusFilter, yearFilter, sortBy, isTrashView]);
+
+  useEffect(() => {
+    setPrintMode(prev => (prev === 'none' ? prev : 'none'));
   }, [search]);
+
+  useEffect(() => {
+    const handleBeforePrint = () => {
+      setPrintMode(prev => (prev === 'none' ? 'list' : prev));
+    };
+    const handleAfterPrint = () => {
+      setTimeout(() => setPrintMode('none'), 1000);
+    };
+    window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('afterprint', handleAfterPrint);
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
+  }, []);
 
   useEffect(() => {
      const handleScroll = () => {
@@ -2547,11 +2737,11 @@ export default function App() {
 
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting) setVisibleCount((prev) => prev + 50);
+        if (entries[0].isIntersecting) setVisibleCount((prev) => prev + 40);
     }, { threshold: 0.1 });
     if (loadMoreRef.current) observer.observe(loadMoreRef.current);
     return () => observer.disconnect();
-  }, [students.length]);
+  }, [students.length, loading]);
 
   // Set edit form data when editing
   useEffect(() => {
@@ -2767,7 +2957,7 @@ export default function App() {
     const matches = students.filter(s => 
         !s.isDeleted && 
         s.id !== selectedId &&
-        s.firstName.includes(name)
+        getStudentSearchRank(s, name) !== -1
     );
     setSimilarStudents(matches);
   };
@@ -2850,29 +3040,31 @@ export default function App() {
     if (selectedRegFilter) res = res.filter(s => s.regNumber === selectedRegFilter);
     if (yearFilter !== 'ALL') res = res.filter(s => new Date(s.createdAt).getFullYear().toString() === yearFilter);
     if (statusFilter !== 'ALL') res = res.filter(s => (s.status || 'active') === statusFilter);
-    if (debouncedQuery) {
-       const q = debouncedQuery.toLowerCase();
-       res = res.filter(s => {
-           const fullName = `${s.firstName} ${s.lastName || ''}`.toLowerCase();
-           return fullName.includes(q);
+    const preparedQuery = prepareArabicQuery(debouncedQuery);
+    if (preparedQuery.normQueryNoSpace) {
+       const ranked: { student: Student; rank: number }[] = [];
+       for (let i = 0; i < res.length; i++) {
+           const s = res[i];
+           const entry = studentSearchIndex.get(s.id);
+           const rank = entry
+             ? getStudentSearchRankFast(entry, preparedQuery)
+             : getStudentSearchRank(s, debouncedQuery);
+           if (rank !== -1) ranked.push({ student: s, rank });
+       }
+       ranked.sort((a, b) => {
+           if (a.rank !== b.rank) return a.rank - b.rank;
+           if (sortBy === 'alphabetical') return arCollator.compare(a.student.firstName, b.student.firstName);
+           if (sortBy === 'byPage') return Number(a.student.pageNumber) - Number(b.student.pageNumber);
+           return b.student.createdAt - a.student.createdAt;
        });
-       res.sort((a, b) => {
-           const aName = `${a.firstName} ${a.lastName || ''}`.toLowerCase();
-           const bName = `${b.firstName} ${b.lastName || ''}`.toLowerCase();
-           const aIndex = aName.indexOf(q);
-           const bIndex = bName.indexOf(q);
-           if (aIndex !== bIndex) return aIndex - bIndex;
-           if (sortBy === 'alphabetical') return a.firstName.localeCompare(b.firstName);
-           if (sortBy === 'byPage') return Number(a.pageNumber) - Number(b.pageNumber);
-           return b.createdAt - a.createdAt;
-       });
+       res = ranked.map(item => item.student);
     } else {
-       if (sortBy === 'alphabetical') res.sort((a,b) => a.firstName.localeCompare(b.firstName));
+       if (sortBy === 'alphabetical') res.sort((a,b) => arCollator.compare(a.firstName, b.firstName));
        else if (sortBy === 'byPage') res.sort((a,b) => Number(a.pageNumber) - Number(b.pageNumber));
        else res.sort((a,b) => b.createdAt - a.createdAt);
     }
     return res;
-  }, [students, debouncedQuery, selectedRegFilter, statusFilter, sortBy, yearFilter, view]);
+  }, [students, studentSearchIndex, debouncedQuery, selectedRegFilter, statusFilter, sortBy, yearFilter, view]);
 
   const displayed = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
   
@@ -3144,6 +3336,11 @@ export default function App() {
                          <input 
                            ref={searchInputRef}
                            id="searchInput" 
+                           type="text"
+                           autoComplete="off"
+                           autoCorrect="off"
+                           autoCapitalize="off"
+                           spellCheck={false}
                            className="flex-1 bg-transparent outline-none text-slate-700 h-8 font-bold text-xs" 
                            placeholder="ابحث باسم الطالب... (Ctrl+F)" 
                            value={search} 
