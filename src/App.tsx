@@ -1772,78 +1772,77 @@ const ModernAppLayout = ({
                         : 'border-slate-200/90 dark:border-slate-800'
                     }`}
                   >
-                    {/* Main Compact Card Row */}
-                    <div className="flex items-center gap-2">
-                      {/* Right: Checkbox */}
-                      <div className="shrink-0" onClick={e => e.stopPropagation()}>
-                        <input 
-                          type="checkbox" 
-                          checked={isSelected}
-                          onChange={(e) => {
-                            if (e.target.checked) setSelectedStudents([...selectedStudents, s.id]);
-                            else setSelectedStudents(selectedStudents.filter(id => id !== s.id));
-                          }}
-                          className="rounded border-slate-300 cursor-pointer w-4 h-4 accent-blue-600"
-                        />
-                      </div>
-
-                      {/* Middle: Name + Inline Blue Surname strictly on ONE Line (auto-shrinks font size for long names) */}
-                      <div className="flex-1 min-w-0">
-                        {(() => {
-                          const displayFull = `#${idx + 1} ${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`;
-                          const availWidth = Math.max(170, viewportWidth - 134);
-                          const fittedFontSize = getSingleLineFontSize(displayFull, availWidth, 14, 8.5, 700);
-                          return (
-                            <div
-                              className="font-bold text-slate-900 dark:text-slate-100 leading-snug whitespace-nowrap overflow-hidden text-ellipsis"
-                              style={{ fontSize: `${fittedFontSize}px` }}
-                              title={`${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`}
-                            >
-                              <span className="font-mono tabular-nums text-[0.82em] font-bold text-slate-400 ml-1">
-                                #{idx + 1}
-                              </span>
-                              <span>{cleanName(s.firstName)}</span>
-                              {s.lastName && (
-                                <span className="text-blue-600 dark:text-blue-400 font-bold mr-1">
-                                  ({s.lastName})
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })()}
-
-                        <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onOpenQuickStatus(s);
-                            }}
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer hover:opacity-90 active:scale-95 shrink-0 ${
-                              s.status === 'graduated' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800' :
-                              s.status === 'left' ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800' :
-                              s.status === 'transferred' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800' :
-                              'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
-                            }`}
-                            title="تعديل سريع للحالة"
+                    {/* Line 1: 100% Full-Width Single-Line Student Name + Inline Blue Surname */}
+                    <div className="w-full min-w-0 mb-2 overflow-hidden">
+                      {(() => {
+                        const displayFull = `#${idx + 1} ${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`;
+                        const availWidth = Math.max(210, viewportWidth - 84);
+                        const fittedFontSize = getSingleLineFontSize(displayFull, availWidth, 14, 7.5, 700);
+                        return (
+                          <div
+                            className="font-bold text-slate-900 dark:text-slate-100 leading-snug whitespace-nowrap overflow-hidden"
+                            style={{ fontSize: `${fittedFontSize}px` }}
+                            title={`${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`}
                           >
-                            <span className={`w-1.5 h-1.5 rounded-full ${
-                              s.status === 'graduated' ? 'bg-blue-600' :
-                              s.status === 'left' ? 'bg-rose-600' :
-                              s.status === 'transferred' ? 'bg-amber-600' :
-                              'bg-emerald-600'
-                            }`}></span>
-                            <span>{s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}</span>
-                          </button>
+                            <span className="font-mono tabular-nums text-[0.82em] font-bold text-slate-400 ml-1">
+                              #{idx + 1}
+                            </span>
+                            <span>{cleanName(s.firstName)}</span>
+                            {s.lastName && (
+                              <span className="text-blue-600 dark:text-blue-400 font-bold mr-1">
+                                ({s.lastName})
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
 
-                          <span className={`${currentTheme.primary} text-white px-2.5 py-0.5 rounded-lg font-mono tabular-nums font-bold text-[11px] whitespace-nowrap`}>
-                            قيد {s.regNumber}
-                          </span>
-
-                          <span className="bg-amber-50 text-amber-900 border border-amber-200/80 dark:bg-amber-950/70 dark:text-amber-300 dark:border-amber-800 px-2.5 py-0.5 rounded-lg font-mono tabular-nums font-bold text-[11px] whitespace-nowrap">
-                            ص {s.pageNumber}
-                          </span>
+                    {/* Line 2: Checkbox + Status + Reg + Page on right; Copy + Expand Arrow on left */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                        <div className="shrink-0 flex items-center ml-0.5" onClick={e => e.stopPropagation()}>
+                          <input 
+                            type="checkbox" 
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedStudents([...selectedStudents, s.id]);
+                              else setSelectedStudents(selectedStudents.filter(id => id !== s.id));
+                            }}
+                            className="rounded border-slate-300 cursor-pointer w-4 h-4 accent-blue-600"
+                          />
                         </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenQuickStatus(s);
+                          }}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer hover:opacity-90 active:scale-95 shrink-0 ${
+                            s.status === 'graduated' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800' :
+                            s.status === 'left' ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800' :
+                            s.status === 'transferred' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800' :
+                            'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
+                          }`}
+                          title="تعديل سريع للحالة"
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            s.status === 'graduated' ? 'bg-blue-600' :
+                            s.status === 'left' ? 'bg-rose-600' :
+                            s.status === 'transferred' ? 'bg-amber-600' :
+                            'bg-emerald-600'
+                          }`}></span>
+                          <span>{s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}</span>
+                        </button>
+
+                        <span className={`${currentTheme.primary} text-white px-2 py-0.5 rounded-lg font-mono tabular-nums font-bold text-[11px] whitespace-nowrap`}>
+                          قيد {s.regNumber}
+                        </span>
+
+                        <span className="bg-amber-50 text-amber-900 border border-amber-200/80 dark:bg-amber-950/70 dark:text-amber-300 dark:border-amber-800 px-2 py-0.5 rounded-lg font-mono tabular-nums font-bold text-[11px] whitespace-nowrap">
+                          ص {s.pageNumber}
+                        </span>
                       </div>
 
                       {/* Left: Copy + Expand Details Arrow */}
@@ -2240,11 +2239,11 @@ const ModernAppLayout = ({
                     </button>
                   </div>
 
-                  {/* Full-Width Single-Line Student Name + Inline Blue Surname + Inline Copy + Expand Arrow */}
-                  <div className="flex items-center justify-between gap-1.5 mb-2.5">
+                  {/* Full-Width Single-Line Student Name + Inline Blue Surname */}
+                  <div className="mb-2.5 w-full min-w-0">
                     <h3
-                      className="font-bold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 leading-snug transition-colors whitespace-nowrap overflow-hidden text-ellipsis flex-1 min-w-0"
-                      style={{ fontSize: `${getSingleLineFontSize(`${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`, 220, 14, 9.5, 700)}px` }}
+                      className="font-bold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 leading-snug transition-colors whitespace-nowrap"
+                      style={{ fontSize: `${getSingleLineFontSize(`${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`, 280, 14, 8, 700)}px` }}
                       title={`${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`}
                     >
                       <span>{cleanName(s.firstName)}</span>
@@ -2254,6 +2253,18 @@ const ModernAppLayout = ({
                         </span>
                       )}
                     </h3>
+                  </div>
+
+                  {/* Chips: Reg first, then Page + Copy & Expand Arrow on the second row */}
+                  <div className="flex items-center justify-between gap-1.5 mb-3">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className={`${currentTheme.primary} text-white px-2.5 py-1 rounded-xl text-xs font-bold font-mono tabular-nums`}>
+                        قيد {s.regNumber}
+                      </span>
+                      <span className="bg-amber-50 text-amber-900 border border-amber-200/80 dark:bg-amber-950 dark:text-amber-300 px-2.5 py-1 rounded-xl text-xs font-bold font-mono tabular-nums">
+                        ص {s.pageNumber}
+                      </span>
+                    </div>
                     <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
                       <button
                         type="button"
@@ -2262,9 +2273,9 @@ const ModernAppLayout = ({
                         title={copiedStudentId === s.id ? "تم النسخ!" : "نسخ اسم الطالب"}
                       >
                         {copiedStudentId === s.id ? (
-                          <Check size={13} className="text-emerald-600" />
+                          <Check size={14} className="text-emerald-600" />
                         ) : (
-                          <Copy size={13} className="text-slate-400 hover:text-blue-600" />
+                          <Copy size={14} className="text-slate-400 hover:text-blue-600" />
                         )}
                       </button>
                       <button
@@ -2277,19 +2288,9 @@ const ModernAppLayout = ({
                         }`}
                         title={expandedStudentIds.includes(s.id) ? "إخفاء التفاصيل" : "عرض الصف والتفاصيل"}
                       >
-                        {expandedStudentIds.includes(s.id) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        {expandedStudentIds.includes(s.id) ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                       </button>
                     </div>
-                  </div>
-
-                  {/* Chips: Reg first, then Page */}
-                  <div className="flex flex-wrap items-center gap-1.5 mb-3">
-                    <span className={`${currentTheme.primary} text-white px-2.5 py-1 rounded-xl text-xs font-bold font-mono tabular-nums`}>
-                      قيد {s.regNumber}
-                    </span>
-                    <span className="bg-amber-50 text-amber-900 border border-amber-200/80 dark:bg-amber-950 dark:text-amber-300 px-2.5 py-1 rounded-xl text-xs font-bold font-mono tabular-nums">
-                      ص {s.pageNumber}
-                    </span>
                   </div>
 
                   {/* Hidden Grade & Extra Details - revealed when pressing the expand arrow */}
