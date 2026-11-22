@@ -14,7 +14,7 @@ import {
   MessageSquare, CheckSquare, Check, Filter, Copy,
   Sparkles, LayoutTemplate, LayoutGrid, List, Eye, Edit2, 
   GraduationCap, School, SlidersHorizontal, TrendingUp,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, Type, Minus
 } from 'lucide-react';
 import { initializeApp } from "firebase/app";
 import { 
@@ -133,6 +133,20 @@ const cleanName = (name?: string) => {
     return restoreYehDots(name.replace(/\s+\d+$/, '').trim());
 };
 
+const arabicFonts = [
+    { id: 'Cairo', name: 'القاهرة (Cairo)', family: "'Cairo', sans-serif", desc: 'هندسي واضح (الافتراضي)' },
+    { id: 'Tajawal', name: 'تجوال (Tajawal)', family: "'Tajawal', sans-serif", desc: 'عصري ومتوازن وسلس' },
+    { id: 'Almarai', name: 'المرعي (Almarai)', family: "'Almarai', sans-serif", desc: 'حديث ومرتب للهاتف' },
+    { id: 'IBM Plex Sans Arabic', name: 'آي بي إم العربي', family: "'IBM Plex Sans Arabic', sans-serif", desc: 'احترافي ودقيق' },
+    { id: 'Readex Pro', name: 'ريدكس برو (Readex)', family: "'Readex Pro', sans-serif", desc: 'مريح للقوائم الطويلة' },
+    { id: 'Noto Kufi Arabic', name: 'كوفي عربي (Kufi)', family: "'Noto Kufi Arabic', sans-serif", desc: 'طابع كوفي أنيق' },
+    { id: 'Amiri', name: 'أميري (Amiri)', family: "'Amiri', serif", desc: 'نسخي كلاسيكي تراثي' },
+    { id: 'Changa', name: 'تشانغا (Changa)', family: "'Changa', sans-serif", desc: 'عريض وواضح جداً' },
+];
+
+let activeFontFamily = "'Cairo', sans-serif";
+let activeFontScale = 1;
+
 let _measureCtx: CanvasRenderingContext2D | null = null;
 const getSingleLineFontSize = (
     text: string,
@@ -141,21 +155,23 @@ const getSingleLineFontSize = (
     minSize = 8.5,
     weight = 700
 ): number => {
-    if (!text || typeof document === 'undefined') return startSize;
+    const scaledStart = Number((startSize * activeFontScale).toFixed(2));
+    const scaledMin = Number((minSize * Math.min(1.12, Math.max(0.85, activeFontScale))).toFixed(2));
+    if (!text || typeof document === 'undefined') return scaledStart;
     if (!_measureCtx) {
         const canvas = document.createElement('canvas');
         _measureCtx = canvas.getContext('2d');
     }
-    if (!_measureCtx) return startSize;
-    let size = startSize;
-    while (size > minSize) {
-        _measureCtx.font = `${weight} ${size}px Cairo, sans-serif`;
+    if (!_measureCtx) return scaledStart;
+    let size = scaledStart;
+    while (size > scaledMin) {
+        _measureCtx.font = `${weight} ${size}px ${activeFontFamily}`;
         if (_measureCtx.measureText(text).width * 1.05 <= maxWidth) {
             return size;
         }
         size -= 0.5;
     }
-    return minSize;
+    return scaledMin;
 };
 
 const normalizeArabicSearch = (text?: string): string => {
@@ -2729,6 +2745,11 @@ export default function App() {
   const [similarStudents, setSimilarStudents] = useState<Student[]>([]);
   const [colorTheme, setColorTheme] = useState(localStorage.getItem('appTheme') || 'slate');
   const [isDarkMode, setIsDarkMode] = useState(localStorage.getItem('darkMode') === 'true');
+  const [appFont, setAppFont] = useState<string>(() => localStorage.getItem('appFont') || 'Cairo');
+  const [fontScale, setFontScale] = useState<number>(() => {
+    const saved = parseFloat(localStorage.getItem('appFontScale') || '1');
+    return Number.isFinite(saved) && saved >= 0.85 && saved <= 1.25 ? saved : 1;
+  });
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [uiDesignMode, setUiDesignMode] = useState<'modern' | 'classic'>(() => {
     return (localStorage.getItem('uiDesignMode') as 'modern' | 'classic') || 'modern';
@@ -2792,6 +2813,9 @@ export default function App() {
 
   const inSearchMode = isSearchActive || search.trim().length > 0;
   const currentTheme = themeColors[colorTheme] || themeColors.slate;
+  const activeFontObj = arabicFonts.find(f => f.id === appFont) || arabicFonts[0];
+  activeFontFamily = activeFontObj.family;
+  activeFontScale = Math.min(1.25, Math.max(0.85, Number(fontScale.toFixed(2))));
 
   // Pre-compute normalized Arabic names once whenever students change for instant 0ms search
   const studentSearchIndex = useMemo(() => {
@@ -3077,6 +3101,18 @@ export default function App() {
         document.documentElement.classList.remove('dark');
     }
   }, [isDarkMode]);
+
+  useEffect(() => {
+    const fontObj = arabicFonts.find(f => f.id === appFont) || arabicFonts[0];
+    localStorage.setItem('appFont', fontObj.id);
+    document.documentElement.style.setProperty('--app-font-family', fontObj.family);
+  }, [appFont]);
+
+  useEffect(() => {
+    const clamped = Math.min(1.25, Math.max(0.85, Number(fontScale.toFixed(2))));
+    localStorage.setItem('appFontScale', String(clamped));
+    document.documentElement.style.fontSize = `${(16 * clamped).toFixed(2)}px`;
+  }, [fontScale]);
 
   useEffect(() => {
     localStorage.setItem('customRegs', JSON.stringify(customRegs));
@@ -5095,24 +5131,203 @@ export default function App() {
             </Modal>
         )}
 
-        {/* Theme Modal */}
+        {/* Theme, Colors, Arabic Fonts & Font Size Modal */}
         {showThemeModal && (
-          <Modal onClose={() => setShowThemeModal(false)}>
-            <div className="bg-white rounded-2xl p-5 text-center space-y-4 shadow-xl">
-               <h3 className="text-lg font-bold">اختر لون التطبيق</h3>
-               <div className="grid grid-cols-2 gap-3">
-                  {Object.entries(themeColors).map(([key, value]) => (
-                    <button 
-                      key={key} 
-                      onClick={() => { setColorTheme(key); setShowThemeModal(false); }}
-                      className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${colorTheme === key ? `border-black bg-slate-50` : 'border-transparent hover:bg-slate-50'}`}
+          <Modal onClose={() => setShowThemeModal(false)} maxWidth="max-w-lg">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl pt-7 px-4 pb-4 sm:p-6 shadow-2xl max-h-[88vh] flex flex-col w-full text-right border border-slate-100 dark:border-slate-800 space-y-4">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 pl-9">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-2xl bg-violet-100 dark:bg-violet-950 text-violet-600 dark:text-violet-400">
+                    <Palette size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-slate-800 dark:text-slate-100 leading-tight">الثيمات والألوان والخطوط</h3>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">تخصيص لون التطبيق ونوع الخط العربي وحجمه</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-y-auto flex-1 custom-scrollbar space-y-5 px-0.5">
+                {/* 1. Theme Colors & Dark Mode */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                      <Palette size={14} className="text-violet-500" /> ألوان التطبيق
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsDarkMode(!isDarkMode)}
+                      className="px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[11px] font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
-                       <div className={`w-6 h-6 rounded-full ${value.primary}`}></div>
-                       <span className="font-bold text-slate-700 text-sm">{value.name}</span>
+                      {isDarkMode ? <Sun size={13} className="text-amber-500" /> : <Moon size={13} className="text-slate-600" />}
+                      <span>{isDarkMode ? 'الوضع النهاري' : 'الوضع الليلي'}</span>
                     </button>
-                  ))}
-               </div>
-               <button onClick={() => setShowThemeModal(false)} className="w-full py-2.5 bg-slate-100 font-bold rounded-xl text-slate-600 text-sm">إغلاق</button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {Object.entries(themeColors).map(([key, value]) => (
+                      <button
+                        type="button"
+                        key={key}
+                        onClick={() => setColorTheme(key)}
+                        className={`flex items-center gap-2 p-2.5 rounded-xl border-2 transition-all cursor-pointer ${
+                          colorTheme === key
+                            ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/30 shadow-xs'
+                            : 'border-slate-200/80 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <div className={`w-5 h-5 rounded-full ${value.primary} shrink-0 shadow-xs`}></div>
+                        <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate">{value.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. Font Size Control (Zoom In / Zoom Out) */}
+                <div className="space-y-2.5 bg-slate-50/90 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-black text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                      <Type size={14} className="text-blue-600" /> حجم الخط
+                    </span>
+                    <span dir="ltr" className="text-xs font-black font-mono px-2 py-0.5 rounded-lg bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+                      {Math.round(fontScale * 100)}%
+                    </span>
+                  </div>
+
+                  {/* Live Sample Preview */}
+                  <div
+                    className="bg-white dark:bg-slate-900 rounded-xl p-2.5 border border-slate-200/80 dark:border-slate-700 text-center"
+                    style={{ fontFamily: activeFontObj.family }}
+                  >
+                    <div
+                      className="font-bold text-slate-900 dark:text-slate-100 leading-relaxed"
+                      style={{ fontSize: `${(14 * fontScale).toFixed(1)}px` }}
+                    >
+                      علي حمدي محمد مهدي <span className="text-blue-600 dark:text-blue-400">(الموسوي)</span>
+                    </div>
+                  </div>
+
+                  {/* Minus / Slider / Plus Controls */}
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setFontScale(prev => Math.max(0.85, Number((prev - 0.05).toFixed(2))))}
+                      disabled={fontScale <= 0.85}
+                      className="h-9 px-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center gap-1 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shrink-0"
+                      title="تصغير الخط"
+                    >
+                      <Minus size={14} />
+                      <span>تصغير</span>
+                    </button>
+
+                    <input
+                      type="range"
+                      min={0.85}
+                      max={1.25}
+                      step={0.05}
+                      value={fontScale}
+                      onChange={(e) => setFontScale(parseFloat(e.target.value))}
+                      className="flex-1 accent-blue-600 cursor-pointer h-2"
+                      aria-label="حجم الخط"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => setFontScale(prev => Math.min(1.25, Number((prev + 0.05).toFixed(2))))}
+                      disabled={fontScale >= 1.25}
+                      className="h-9 px-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center gap-1 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shrink-0"
+                      title="تكبير الخط"
+                    >
+                      <Plus size={14} />
+                      <span>تكبير</span>
+                    </button>
+                  </div>
+
+                  {/* Quick Size Presets */}
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[
+                      { label: 'صغير', value: 0.9 },
+                      { label: 'افتراضي', value: 1 },
+                      { label: 'كبير', value: 1.1 },
+                      { label: 'كبير جداً', value: 1.2 },
+                    ].map(preset => (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        onClick={() => setFontScale(preset.value)}
+                        className={`py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer border ${
+                          Math.abs(fontScale - preset.value) < 0.01
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                            : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 3. Arabic Fonts Picker */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                      <Type size={14} className="text-emerald-600" /> الخطوط العربية ({arabicFonts.length})
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400">معاينة فورية للخط</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {arabicFonts.map((font) => {
+                      const isSelected = appFont === font.id;
+                      return (
+                        <button
+                          key={font.id}
+                          type="button"
+                          onClick={() => setAppFont(font.id)}
+                          style={{ fontFamily: font.family }}
+                          className={`p-2.5 rounded-xl border-2 text-right transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                            isSelected
+                              ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/30 shadow-xs'
+                              : 'border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <div className="font-bold text-slate-800 dark:text-slate-100 text-xs truncate">{font.name}</div>
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">علي حمدي محمد • {font.desc}</div>
+                          </div>
+                          {isSelected && (
+                            <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0">
+                              <Check size={12} />
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="flex items-center gap-2 pt-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setColorTheme('slate');
+                    setAppFont('Cairo');
+                    setFontScale(1);
+                  }}
+                  className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold rounded-xl text-slate-600 dark:text-slate-300 text-xs flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  <RotateCcw size={13} />
+                  <span>افتراضي</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowThemeModal(false)}
+                  className={`flex-1 py-2.5 ${currentTheme.primary} ${currentTheme.hover} text-white font-bold rounded-xl text-xs transition-colors cursor-pointer shadow-sm`}
+                >
+                  حفظ وإغلاق
+                </button>
+              </div>
             </div>
           </Modal>
         )}
