@@ -13,7 +13,8 @@ import {
   Mic, Maximize2, Minimize2, WifiOff, Share2, 
   MessageSquare, CheckSquare, Check, Filter, Copy,
   Sparkles, LayoutTemplate, LayoutGrid, List, Eye, Edit2, 
-  GraduationCap, School, SlidersHorizontal, TrendingUp
+  GraduationCap, School, SlidersHorizontal, TrendingUp,
+  ChevronDown, ChevronUp
 } from 'lucide-react';
 import { initializeApp } from "firebase/app";
 import { 
@@ -91,6 +92,31 @@ export interface Student {
 const cleanName = (name?: string) => {
     if (!name) return "";
     return name.replace(/\s+\d+$/, '').trim();
+};
+
+let _measureCtx: CanvasRenderingContext2D | null = null;
+const getSingleLineFontSize = (
+    text: string,
+    maxWidth: number,
+    startSize = 14,
+    minSize = 8.5,
+    weight = 700
+): number => {
+    if (!text || typeof document === 'undefined') return startSize;
+    if (!_measureCtx) {
+        const canvas = document.createElement('canvas');
+        _measureCtx = canvas.getContext('2d');
+    }
+    if (!_measureCtx) return startSize;
+    let size = startSize;
+    while (size > minSize) {
+        _measureCtx.font = `${weight} ${size}px Cairo, sans-serif`;
+        if (_measureCtx.measureText(text).width * 1.05 <= maxWidth) {
+            return size;
+        }
+        size -= 0.5;
+    }
+    return minSize;
 };
 
 const normalizeArabicSearch = (text?: string): string => {
@@ -1215,6 +1241,23 @@ const ModernAppLayout = ({
   const totalCount = useMemo(() => students.filter(s => !s.isDeleted).length, [students]);
 
   const [copiedStudentId, setCopiedStudentId] = useState<string | null>(null);
+  const [expandedStudentIds, setExpandedStudentIds] = useState<string[]>([]);
+  const [viewportWidth, setViewportWidth] = useState<number>(() =>
+    typeof window !== 'undefined' ? window.innerWidth : 390
+  );
+
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const toggleExpandStudent = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setExpandedStudentIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
 
   const handleCopyStudentName = (e: React.MouseEvent, student: Student) => {
     e.stopPropagation();
@@ -1694,9 +1737,10 @@ const ModernAppLayout = ({
           </div>
 
           {/* 4A. Dedicated Mobile Responsive List (< md) */}
-          <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+          <div className="md:hidden p-2.5 space-y-2.5 bg-slate-50/40 dark:bg-slate-950/30">
             {displayed.map((s, idx) => {
               const isSelected = selectedStudents.includes(s.id);
+              const isExpanded = expandedStudentIds.includes(s.id);
               const firstLetter = cleanName(s.firstName).charAt(0) || 'ط';
               const isFirstOfLetter = sortBy === 'alphabetical' && !debouncedQuery && (
                 idx === 0 || cleanName(displayed[idx - 1].firstName).charAt(0) !== firstLetter
@@ -1706,7 +1750,7 @@ const ModernAppLayout = ({
                   {isFirstOfLetter && (
                     <div 
                       id={`modern-mobile-section-${firstLetter}`}
-                      className="sticky top-0 z-10 bg-slate-100/95 dark:bg-slate-800/95 backdrop-blur px-3 py-1.5 border-y border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs font-black text-blue-600 dark:text-blue-400"
+                      className="sticky top-0 z-10 bg-slate-100/95 dark:bg-slate-800/95 backdrop-blur px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs font-black text-blue-600 dark:text-blue-400"
                     >
                       <div className="flex items-center gap-1.5">
                         <span className="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center text-[11px]">
@@ -1722,13 +1766,16 @@ const ModernAppLayout = ({
                   <div 
                     id={`modern-mobile-student-${s.id}`}
                     onClick={() => { setSelectedId(s.id); setView('detail'); }}
-                    className={`px-3.5 py-3 transition-colors cursor-pointer active:bg-blue-50/50 dark:active:bg-slate-800/50 ${
-                      isSelected ? 'bg-blue-50/40 dark:bg-blue-950/20' : ''
+                    className={`bg-white dark:bg-slate-900 rounded-2xl px-3.5 py-3 border transition-all cursor-pointer active:scale-[0.99] shadow-2xs ${
+                      isSelected 
+                        ? 'border-blue-500 ring-1 ring-blue-500/25 bg-blue-50/20 dark:bg-blue-950/20' 
+                        : 'border-slate-200/90 dark:border-slate-800'
                     }`}
                   >
-                    {/* Line 1: Checkbox & Index on right, Single Quick Status Shortcut on left */}
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                    {/* Main Compact Card Row */}
+                    <div className="flex items-center gap-2">
+                      {/* Right: Checkbox */}
+                      <div className="shrink-0" onClick={e => e.stopPropagation()}>
                         <input 
                           type="checkbox" 
                           checked={isSelected}
@@ -1736,122 +1783,184 @@ const ModernAppLayout = ({
                             if (e.target.checked) setSelectedStudents([...selectedStudents, s.id]);
                             else setSelectedStudents(selectedStudents.filter(id => id !== s.id));
                           }}
-                          className="rounded border-slate-300 cursor-pointer w-4 h-4"
+                          className="rounded border-slate-300 cursor-pointer w-4 h-4 accent-blue-600"
                         />
-                        <span className="font-mono tabular-nums text-[11px] font-bold text-slate-400">
-                          #{idx + 1}
-                        </span>
                       </div>
 
-                      {/* Quick Status Shortcut Button (Appears ONLY ONCE) */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onOpenQuickStatus(s);
-                        }}
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer hover:opacity-90 active:scale-95 shrink-0 ${
-                          s.status === 'graduated' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800' :
-                          s.status === 'left' ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800' :
-                          s.status === 'transferred' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800' :
-                          'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
-                        }`}
-                        title="تعديل سريع للحالة"
-                      >
-                        <span className={`w-1.5 h-1.5 rounded-full ${
-                          s.status === 'graduated' ? 'bg-blue-600' :
-                          s.status === 'left' ? 'bg-rose-600' :
-                          s.status === 'transferred' ? 'bg-amber-600' :
-                          'bg-emerald-600'
-                        }`}></span>
-                        <span>{s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}</span>
-                        <SlidersHorizontal size={9} className="opacity-70" />
-                      </button>
-                    </div>
+                      {/* Middle: Name + Inline Blue Surname strictly on ONE Line (auto-shrinks font size for long names) */}
+                      <div className="flex-1 min-w-0">
+                        {(() => {
+                          const displayFull = `#${idx + 1} ${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`;
+                          const availWidth = Math.max(170, viewportWidth - 134);
+                          const fittedFontSize = getSingleLineFontSize(displayFull, availWidth, 14, 8.5, 700);
+                          return (
+                            <div
+                              className="font-bold text-slate-900 dark:text-slate-100 leading-snug whitespace-nowrap overflow-hidden text-ellipsis"
+                              style={{ fontSize: `${fittedFontSize}px` }}
+                              title={`${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`}
+                            >
+                              <span className="font-mono tabular-nums text-[0.82em] font-bold text-slate-400 ml-1">
+                                #{idx + 1}
+                              </span>
+                              <span>{cleanName(s.firstName)}</span>
+                              {s.lastName && (
+                                <span className="text-blue-600 dark:text-blue-400 font-bold mr-1">
+                                  ({s.lastName})
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
 
-                    {/* Line 2: Full-Width Student Name + Inline Small Copy Button */}
-                    <div className="w-full min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="font-black text-slate-800 dark:text-slate-100 text-[15px] leading-relaxed break-words">
-                          <span>{cleanName(s.firstName)}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
                           <button
                             type="button"
-                            onClick={(e) => handleCopyStudentName(e, s)}
-                            className="p-1 mr-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors cursor-pointer inline-flex items-center justify-center align-middle"
-                            title={copiedStudentId === s.id ? "تم النسخ!" : "نسخ اسم الطالب"}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenQuickStatus(s);
+                            }}
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer hover:opacity-90 active:scale-95 shrink-0 ${
+                              s.status === 'graduated' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800' :
+                              s.status === 'left' ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800' :
+                              s.status === 'transferred' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800' :
+                              'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
+                            }`}
+                            title="تعديل سريع للحالة"
                           >
-                            {copiedStudentId === s.id ? (
-                              <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded">
-                                <Check size={11} /> تم النسخ
-                              </span>
-                            ) : (
-                              <Copy size={13} className="text-slate-400 hover:text-blue-600" />
-                            )}
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              s.status === 'graduated' ? 'bg-blue-600' :
+                              s.status === 'left' ? 'bg-rose-600' :
+                              s.status === 'transferred' ? 'bg-amber-600' :
+                              'bg-emerald-600'
+                            }`}></span>
+                            <span>{s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}</span>
+                          </button>
+
+                          <span className={`${currentTheme.primary} text-white px-2.5 py-0.5 rounded-lg font-mono tabular-nums font-bold text-[11px] whitespace-nowrap`}>
+                            قيد {s.regNumber}
+                          </span>
+
+                          <span className="bg-amber-50 text-amber-900 border border-amber-200/80 dark:bg-amber-950/70 dark:text-amber-300 dark:border-amber-800 px-2.5 py-0.5 rounded-lg font-mono tabular-nums font-bold text-[11px] whitespace-nowrap">
+                            ص {s.pageNumber}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Left: Copy + Expand Details Arrow */}
+                      <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={(e) => handleCopyStudentName(e, s)}
+                          className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors cursor-pointer inline-flex items-center justify-center"
+                          title={copiedStudentId === s.id ? "تم النسخ!" : "نسخ اسم الطالب"}
+                        >
+                          {copiedStudentId === s.id ? (
+                            <Check size={15} className="text-emerald-600" />
+                          ) : (
+                            <Copy size={15} />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => toggleExpandStudent(e, s.id)}
+                          className={`p-1 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center ${
+                            isExpanded
+                              ? 'text-blue-600 bg-blue-50 dark:bg-blue-950/60 dark:text-blue-300'
+                              : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                          title={isExpanded ? "إخفاء التفاصيل" : "عرض الصف والتفاصيل"}
+                        >
+                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Expanded Details Drawer (Hidden by default; reveals Grade + Full Details when pressing arrow) */}
+                    {isExpanded && (
+                      <div
+                        className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 space-y-2 text-[11px] animate-fade-in"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <div className="grid grid-cols-2 gap-1.5 bg-slate-50/90 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                          {s.transferGrade && (
+                            <div className="col-span-2 text-amber-800 dark:text-amber-300 font-bold">
+                              الصف: <span className="font-black">{s.transferGrade}</span>
+                            </div>
+                          )}
+                          {s.status === 'graduated' && s.graduationGrade && (
+                            <div className="col-span-2 text-blue-800 dark:text-blue-300 font-bold">
+                              الصف / الفرع: <span className="font-black">{s.graduationGrade}</span>
+                            </div>
+                          )}
+                          {s.docDestination && (
+                            <div className="col-span-2 text-slate-700 dark:text-slate-200 font-semibold">
+                              الجهة: <span className="font-bold">{s.docDestination}</span>
+                            </div>
+                          )}
+                          {s.docDate && (
+                            <div className="text-slate-600 dark:text-slate-300 font-semibold">
+                              تاريخ الوثيقة: <span className="font-mono font-bold">{s.docDate}</span>
+                            </div>
+                          )}
+                          {s.docPurpose && (
+                            <div className="text-slate-600 dark:text-slate-300 font-semibold">
+                              الغرض: <span className="font-bold">{s.docPurpose}</span>
+                            </div>
+                          )}
+                          {s.graduationYear && (
+                            <div className="text-slate-600 dark:text-slate-300 font-semibold">
+                              العام الدراسي: <span className="font-mono font-bold">{s.graduationYear}</span>
+                            </div>
+                          )}
+                          {s.graduationRound && (
+                            <div className="text-slate-600 dark:text-slate-300 font-semibold">
+                              الدور: <span className="font-bold">{s.graduationRound}</span>
+                            </div>
+                          )}
+                          <div className="text-slate-500 dark:text-slate-400 font-semibold">
+                            تاريخ التسجيل: <span className="font-mono">{new Date(s.createdAt).toLocaleDateString('ar-EG')}</span>
+                          </div>
+                          {s.notes && (
+                            <div className="col-span-2 text-slate-600 dark:text-slate-300 font-semibold">
+                              ملاحظات: <span>{s.notes}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between gap-1.5 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => { setSelectedId(s.id); setView('detail'); }}
+                            className="flex-1 py-1.5 rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 font-bold flex items-center justify-center gap-1 hover:bg-blue-100 transition-colors cursor-pointer"
+                          >
+                            <Eye size={13} /> عرض
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setSelectedId(s.id); setView('edit'); setSimilarStudents([]); }}
+                            className="flex-1 py-1.5 rounded-lg bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 font-bold flex items-center justify-center gap-1 hover:bg-amber-100 transition-colors cursor-pointer"
+                          >
+                            <Edit2 size={13} /> تعديل
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setSelectedId(s.id); setPrintMode('single'); setTimeout(() => window.print(), 500); }}
+                            className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 font-bold flex items-center justify-center gap-1 hover:bg-indigo-50 hover:text-indigo-600 transition-colors cursor-pointer"
+                            title="طباعة"
+                          >
+                            <Printer size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(s.id)}
+                            className="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-300 font-bold flex items-center justify-center gap-1 hover:bg-rose-100 transition-colors cursor-pointer"
+                            title="حذف"
+                          >
+                            <Trash2 size={13} />
                           </button>
                         </div>
                       </div>
-                      {s.lastName && (
-                        <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-0.5">
-                          اللقب: {s.lastName}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Optional Extra Status Details */}
-                    {s.status === 'transferred' && (s.docDestination || s.transferGrade) && (
-                      <div className="bg-amber-50/70 dark:bg-amber-950/30 px-2.5 py-1.5 rounded-lg text-[10px] text-amber-900 dark:text-amber-300 font-semibold mt-2 border border-amber-200/60 dark:border-amber-900/60">
-                        {s.docDestination && <span>الجهة: {s.docDestination}</span>}
-                        {s.docDestination && s.transferGrade && <span> • </span>}
-                        {s.transferGrade && <span>الصف: {s.transferGrade}</span>}
-                      </div>
                     )}
-
-                    {s.status === 'graduated' && (s.graduationYear || s.graduationGrade || s.graduationRound) && (
-                      <div className="bg-blue-50/70 dark:bg-blue-950/30 px-2.5 py-1.5 rounded-lg text-[10px] text-blue-900 dark:text-blue-300 font-semibold mt-2 border border-blue-200/60 dark:border-blue-900/60">
-                        <span>🎓 {s.graduationGrade || 'السادس'}</span>
-                        {s.graduationRound && <span> • {s.graduationRound}</span>}
-                        {s.graduationYear && <span> • {s.graduationYear}</span>}
-                      </div>
-                    )}
-
-                    {/* Line 3: Bottom Footer Row: Page/Reg Badges Side-by-Side + Compact Actions */}
-                    <div className="flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-slate-100/80 dark:border-slate-800/80">
-                      <div className="flex items-center gap-1.5 flex-nowrap">
-                        <span className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 px-2.5 py-0.5 rounded-lg font-mono tabular-nums font-bold text-[11px] whitespace-nowrap">
-                          ص {s.pageNumber}
-                        </span>
-                        <span className={`${currentTheme.primary} text-white px-2.5 py-0.5 rounded-lg font-mono tabular-nums font-bold text-[11px] whitespace-nowrap`}>
-                          قيد {s.regNumber}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-                        <button 
-                          type="button"
-                          onClick={() => { setSelectedId(s.id); setView('edit'); setSimilarStudents([]); }} 
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 bg-slate-50 dark:bg-slate-800 hover:bg-amber-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-                          title="تعديل"
-                        >
-                          <Edit2 size={13} />
-                        </button>
-                        <button 
-                          type="button"
-                          onClick={() => { setSelectedId(s.id); setPrintMode('single'); setTimeout(() => window.print(), 500); }} 
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 bg-slate-50 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-                          title="طباعة"
-                        >
-                          <Printer size={13} />
-                        </button>
-                        <button 
-                          type="button"
-                          onClick={() => handleDelete(s.id)} 
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-red-600 bg-slate-50 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-                          title="حذف"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 </React.Fragment>
               );
@@ -1934,44 +2043,45 @@ const ModernAppLayout = ({
                             <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-black text-xs flex items-center justify-center shrink-0 border border-slate-200/80 dark:border-slate-700">
                               {firstLetter}
                             </div>
-                            <div>
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-black text-slate-800 dark:text-slate-100 text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                                  {cleanName(s.firstName)}
-                                </span>
-                                {/* Small Copy Button */}
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleCopyStudentName(e, s)}
-                                  className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
-                                  title={copiedStudentId === s.id ? "تم النسخ!" : "نسخ اسم الطالب"}
-                                >
-                                  {copiedStudentId === s.id ? (
-                                    <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.5 rounded">
-                                      <Check size={11} /> منسوخ
-                                    </span>
-                                  ) : (
-                                    <Copy size={13} className="text-slate-400 hover:text-blue-600" />
-                                  )}
-                                </button>
-                                {/* Quick status edit icon shortcut next to name (avoids duplicating status badge in table) */}
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onOpenQuickStatus(s);
-                                  }}
-                                  className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
-                                  title="تعديل سريع للحالة"
-                                >
-                                  <SlidersHorizontal size={13} />
-                                </button>
-                              </div>
-                              {s.lastName && (
-                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                                  اللقب: {s.lastName}
-                                </span>
-                              )}
+                            <div className="flex items-center gap-1.5 flex-nowrap min-w-0">
+                              <span
+                                className="font-bold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors whitespace-nowrap"
+                                style={{ fontSize: `${getSingleLineFontSize(`${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`, 320, 14, 10, 700)}px` }}
+                              >
+                                {cleanName(s.firstName)}
+                                {s.lastName && (
+                                  <span className="text-blue-600 dark:text-blue-400 font-bold mr-1">
+                                    ({s.lastName})
+                                  </span>
+                                )}
+                              </span>
+                              {/* Small Copy Button */}
+                              <button
+                                type="button"
+                                onClick={(e) => handleCopyStudentName(e, s)}
+                                className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
+                                title={copiedStudentId === s.id ? "تم النسخ!" : "نسخ اسم الطالب"}
+                              >
+                                {copiedStudentId === s.id ? (
+                                  <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.5 rounded">
+                                    <Check size={11} /> منسوخ
+                                  </span>
+                                ) : (
+                                  <Copy size={13} className="text-slate-400 hover:text-blue-600" />
+                                )}
+                              </button>
+                              {/* Quick status edit icon shortcut next to name (avoids duplicating status badge in table) */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onOpenQuickStatus(s);
+                                }}
+                                className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
+                                title="تعديل سريع للحالة"
+                              >
+                                <SlidersHorizontal size={13} />
+                              </button>
                             </div>
                           </div>
                         </td>
@@ -2130,55 +2240,87 @@ const ModernAppLayout = ({
                     </button>
                   </div>
 
-                  {/* Full-Width Student Name + Inline Copy Button */}
-                  <div className="mb-2.5">
-                    <h3 className="font-black text-slate-800 dark:text-slate-100 text-sm group-hover:text-blue-600 leading-relaxed transition-colors">
+                  {/* Full-Width Single-Line Student Name + Inline Blue Surname + Inline Copy + Expand Arrow */}
+                  <div className="flex items-center justify-between gap-1.5 mb-2.5">
+                    <h3
+                      className="font-bold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 leading-snug transition-colors whitespace-nowrap overflow-hidden text-ellipsis flex-1 min-w-0"
+                      style={{ fontSize: `${getSingleLineFontSize(`${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`, 220, 14, 9.5, 700)}px` }}
+                      title={`${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`}
+                    >
                       <span>{cleanName(s.firstName)}</span>
+                      {s.lastName && (
+                        <span className="text-blue-600 dark:text-blue-400 font-bold mr-1">
+                          ({s.lastName})
+                        </span>
+                      )}
+                    </h3>
+                    <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
                       <button
                         type="button"
                         onClick={(e) => handleCopyStudentName(e, s)}
-                        className="p-1 mr-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors cursor-pointer inline-flex items-center justify-center align-middle"
+                        className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors cursor-pointer inline-flex items-center justify-center"
                         title={copiedStudentId === s.id ? "تم النسخ!" : "نسخ اسم الطالب"}
                       >
                         {copiedStudentId === s.id ? (
-                          <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.5 rounded">
-                            <Check size={11} /> منسوخ
-                          </span>
+                          <Check size={13} className="text-emerald-600" />
                         ) : (
                           <Copy size={13} className="text-slate-400 hover:text-blue-600" />
                         )}
                       </button>
-                    </h3>
-                    {s.lastName && (
-                      <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-0.5">
-                        اللقب: {s.lastName}
-                      </p>
-                    )}
+                      <button
+                        type="button"
+                        onClick={(e) => toggleExpandStudent(e, s.id)}
+                        className={`p-1 rounded-md transition-colors cursor-pointer inline-flex items-center justify-center ${
+                          expandedStudentIds.includes(s.id)
+                            ? 'text-blue-600 bg-blue-50 dark:bg-blue-950/60 dark:text-blue-300'
+                            : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                        }`}
+                        title={expandedStudentIds.includes(s.id) ? "إخفاء التفاصيل" : "عرض الصف والتفاصيل"}
+                      >
+                        {expandedStudentIds.includes(s.id) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Chips: Page first, then Reg */}
+                  {/* Chips: Reg first, then Page */}
                   <div className="flex flex-wrap items-center gap-1.5 mb-3">
-                    <span className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 px-2.5 py-1 rounded-xl text-xs font-bold font-mono tabular-nums">
-                      صفحة {s.pageNumber}
-                    </span>
                     <span className={`${currentTheme.primary} text-white px-2.5 py-1 rounded-xl text-xs font-bold font-mono tabular-nums`}>
                       قيد {s.regNumber}
                     </span>
+                    <span className="bg-amber-50 text-amber-900 border border-amber-200/80 dark:bg-amber-950 dark:text-amber-300 px-2.5 py-1 rounded-xl text-xs font-bold font-mono tabular-nums">
+                      ص {s.pageNumber}
+                    </span>
                   </div>
 
-                  {/* Transferred summary if applicable */}
-                  {s.status === 'transferred' && (s.docDestination || s.transferGrade) && (
-                    <div className="bg-amber-50/70 dark:bg-amber-950/30 p-2 rounded-xl text-[11px] text-amber-900 dark:text-amber-300 font-semibold mb-3 border border-amber-200/60 dark:border-amber-900/60">
-                      {s.docDestination && <div>الجهة: {s.docDestination}</div>}
-                      {s.transferGrade && <div>الصف: {s.transferGrade}</div>}
-                    </div>
-                  )}
-
-                  {/* Graduated summary if applicable */}
-                  {s.status === 'graduated' && (s.graduationYear || s.graduationGrade || s.graduationRound) && (
-                    <div className="bg-blue-50/70 dark:bg-blue-950/30 p-2 rounded-xl text-[11px] text-blue-900 dark:text-blue-300 font-semibold mb-3 border border-blue-200/60 dark:border-blue-900/60">
-                      <div>🎓 التخرج: {s.graduationGrade || 'السادس'}{s.graduationRound ? ' • ' + s.graduationRound : ''}</div>
-                      {s.graduationYear && <div>العام الدراسي: {s.graduationYear}</div>}
+                  {/* Hidden Grade & Extra Details - revealed when pressing the expand arrow */}
+                  {expandedStudentIds.includes(s.id) && (
+                    <div className="space-y-2 mb-3 animate-fade-in" onClick={e => e.stopPropagation()}>
+                      <div className="bg-slate-50/90 dark:bg-slate-800/60 p-2.5 rounded-xl text-[11px] space-y-1 border border-slate-100 dark:border-slate-700">
+                        {s.transferGrade && (
+                          <div className="text-amber-800 dark:text-amber-300 font-bold">الصف: {s.transferGrade}</div>
+                        )}
+                        {s.status === 'graduated' && s.graduationGrade && (
+                          <div className="text-blue-800 dark:text-blue-300 font-bold">🎓 الصف / الفرع: {s.graduationGrade}</div>
+                        )}
+                        {s.docDestination && (
+                          <div className="text-slate-700 dark:text-slate-200 font-semibold">الجهة: {s.docDestination}</div>
+                        )}
+                        {s.docDate && (
+                          <div className="text-slate-600 dark:text-slate-300 font-semibold">تاريخ الوثيقة: {s.docDate}</div>
+                        )}
+                        {s.graduationYear && (
+                          <div className="text-slate-600 dark:text-slate-300 font-semibold">العام الدراسي: {s.graduationYear}</div>
+                        )}
+                        {s.graduationRound && (
+                          <div className="text-slate-600 dark:text-slate-300 font-semibold">الدور: {s.graduationRound}</div>
+                        )}
+                        <div className="text-slate-500 dark:text-slate-400 font-semibold">
+                          تاريخ التسجيل: {new Date(s.createdAt).toLocaleDateString('ar-EG')}
+                        </div>
+                        {s.notes && (
+                          <div className="text-slate-600 dark:text-slate-300 font-semibold">ملاحظات: {s.notes}</div>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -3654,7 +3796,13 @@ export default function App() {
                                       >
                                           <div className={`w-2 h-2 rounded-full shrink-0 ${s.status === 'graduated' ? 'bg-blue-500' : s.status === 'left' ? 'bg-rose-500' : s.status === 'transferred' ? 'bg-amber-500' : 'bg-emerald-500'}`} title={s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}></div>
                                           <span className="font-bold text-slate-800 text-sm group-hover:text-blue-700 transition-colors">
-                                              {cleanName(s.firstName)}{s.lastName ? ` / ${s.lastName}` : ''}
+                                              <span>{cleanName(s.firstName)}</span>
+                                              {s.lastName && (
+                                                <span className="inline-flex items-center gap-1 mr-1.5 px-2 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800 whitespace-nowrap align-middle">
+                                                  <span>/</span>
+                                                  <span>{s.lastName}</span>
+                                                </span>
+                                              )}
                                           </span>
                                       </div>
                                   </td>
@@ -3735,7 +3883,13 @@ export default function App() {
                                   >
                                       <div className={`w-2 h-2 rounded-full shrink-0 ${s.status === 'graduated' ? 'bg-blue-500' : s.status === 'left' ? 'bg-rose-500' : s.status === 'transferred' ? 'bg-amber-500' : 'bg-emerald-500'}`} title={s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}></div>
                                       <span className="font-bold text-slate-800 text-sm group-hover:text-blue-700 transition-colors">
-                                          {cleanName(s.firstName)}{s.lastName ? ` / ${s.lastName}` : ''}
+                                          <span>{cleanName(s.firstName)}</span>
+                                          {s.lastName && (
+                                            <span className="inline-flex items-center gap-1 mr-1.5 px-2 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800 whitespace-nowrap align-middle">
+                                              <span>/</span>
+                                              <span>{s.lastName}</span>
+                                            </span>
+                                          )}
                                       </span>
                                   </div>
                               </td>
@@ -5459,8 +5613,14 @@ export default function App() {
                      <div className="absolute top-0 right-0 w-24 h-24 bg-slate-50 rounded-full -mr-8 -mt-8"></div>
     
                     <div className="relative">
-                        <h1 className="text-2xl font-extrabold text-slate-900 mb-1">{cleanName(s.firstName)}</h1>
-                        <h2 className="text-lg font-bold text-slate-400">{s.lastName || ""}</h2>
+                        <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 leading-relaxed">
+                          <span>{cleanName(s.firstName)}</span>
+                          {s.lastName && (
+                            <span className="text-blue-600 dark:text-blue-400 font-bold mr-1.5">
+                              ({s.lastName})
+                            </span>
+                          )}
+                        </h1>
                     </div>
 
                     {/* SWAPPED: رقم الصفحة first (right column in RTL), then رقم القيد */}
