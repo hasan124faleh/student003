@@ -1261,14 +1261,14 @@ const ModernAppLayout = ({
       )}
 
       {/* 2. Modern Command Search & Actions Bar */}
-      <div className="glass-panel modern-card-shadow rounded-2xl p-3 space-y-2.5 border border-slate-200/90 dark:border-slate-800">
-        <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
+      <div className={`glass-panel modern-card-shadow rounded-2xl p-2.5 sm:p-3 space-y-2.5 border border-slate-200/90 dark:border-slate-800 ${inSearchMode ? 'sticky top-2 z-30' : ''}`}>
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 items-stretch sm:items-center justify-between">
           {/* Search Input Box */}
           <div className={`relative flex-1 flex items-center bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-1.5 focus-within:ring-2 ${currentTheme.ring} transition-all`}>
             <Search className="text-slate-400 ml-2 shrink-0" size={17} />
             <input 
               ref={searchInputRef}
-              className="flex-1 bg-transparent outline-none text-slate-800 dark:text-slate-100 font-bold text-xs sm:text-sm placeholder:text-slate-400"
+              className="flex-1 bg-transparent outline-none text-slate-800 dark:text-slate-100 font-bold text-xs sm:text-sm placeholder:text-slate-400 min-w-0"
               placeholder="ابحث باسم الطالب أو اللقب..."
               value={search}
               onFocus={() => setIsSearchActive(true)}
@@ -1281,7 +1281,7 @@ const ModernAppLayout = ({
               <button 
                 type="button"
                 onClick={() => { setSearch(''); searchInputRef.current?.focus(); }}
-                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 transition-colors mx-1 shrink-0 cursor-pointer"
+                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 transition-colors mx-0.5 shrink-0 cursor-pointer"
                 title="مسح البحث"
               >
                 <X size={15} />
@@ -1296,96 +1296,116 @@ const ModernAppLayout = ({
               <Mic size={16} />
             </button>
             {inSearchMode && (
-              <button 
-                type="button"
-                onClick={() => {
-                  setSearch('');
-                  setIsSearchActive(false);
-                  setShowSearchFilters(false);
-                  searchInputRef.current?.blur();
-                }}
-                className="text-xs font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/40 mr-1 shrink-0 border border-blue-200 dark:border-blue-800 cursor-pointer"
-              >
-                إلغاء
-              </button>
+              <>
+                <button 
+                  type="button"
+                  onClick={() => setShowSearchFilters(prev => !prev)} 
+                  className={`p-1.5 rounded-lg transition-all shrink-0 cursor-pointer mx-0.5 flex items-center gap-1 text-[11px] font-bold border ${
+                    showSearchFilters || selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL'
+                      ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                      : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                  title={showSearchFilters ? "إخفاء الفلاتر" : "إظهار الفلاتر"}
+                >
+                  <Filter size={14} />
+                  {(selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL') && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                  )}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setSearch('');
+                    setIsSearchActive(false);
+                    setShowSearchFilters(false);
+                    searchInputRef.current?.blur();
+                  }}
+                  className="text-xs font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/40 mr-1 shrink-0 border border-blue-200 dark:border-blue-800 cursor-pointer"
+                >
+                  إلغاء
+                </button>
+              </>
             )}
           </div>
 
-          {/* Primary Action Toolbar */}
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
-            <button 
-              onClick={() => { setSelectedId(null); setView('add'); setSimilarStudents([]); }} 
-              className={`flex-1 sm:flex-initial px-3.5 py-2 ${currentTheme.primary} ${currentTheme.hover} text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer`}
-              title="إضافة طالب جديد (Ctrl+N)"
-            >
-              <Plus size={16} />
-              <span>طالب جديد</span>
-            </button>
-
-            <button 
-              onClick={() => setShowPrintModal(true)} 
-              className="px-3.5 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs transition-colors cursor-pointer"
-              title="طباعة السجل (Ctrl+P)"
-            >
-              <Printer size={16} className="text-blue-600 dark:text-blue-400" />
-              <span>طباعة</span>
-            </button>
-
-            {/* Toggle Filter Button */}
-            <button 
-              onClick={() => setShowSearchFilters(prev => !prev)} 
-              className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
-                showSearchFilters || selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL'
-                  ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 shadow-xs'
-                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
-              }`}
-              title="تصفية السجلات"
-            >
-              <Filter size={15} />
-              <span>فلاتر</span>
-              {(selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL') && (
-                <span className="w-2 h-2 rounded-full bg-blue-600"></span>
-              )}
-            </button>
-
-            {/* View Mode Switcher: Table vs Cards */}
-            <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+          {/* Primary Action Toolbar (Hidden in Search Mode to show more names) */}
+          {!inSearchMode && (
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
               <button 
-                onClick={() => setModernViewType('table')} 
-                className={`p-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                  modernViewType === 'table' 
-                    ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs' 
-                    : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
-                }`}
-                title="عرض الجدول"
+                onClick={() => { setSelectedId(null); setView('add'); setSimilarStudents([]); }} 
+                className={`flex-1 sm:flex-initial px-3.5 py-2 ${currentTheme.primary} ${currentTheme.hover} text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer`}
+                title="إضافة طالب جديد (Ctrl+N)"
               >
-                <List size={15} />
+                <Plus size={16} />
+                <span>طالب جديد</span>
               </button>
+
               <button 
-                onClick={() => setModernViewType('grid')} 
-                className={`p-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                  modernViewType === 'grid' 
-                    ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs' 
-                    : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
-                }`}
-                title="عرض البطاقات"
+                onClick={() => setShowPrintModal(true)} 
+                className="px-3.5 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs transition-colors cursor-pointer"
+                title="طباعة السجل (Ctrl+P)"
               >
-                <LayoutGrid size={15} />
+                <Printer size={16} className="text-blue-600 dark:text-blue-400" />
+                <span>طباعة</span>
+              </button>
+
+              {/* Toggle Filter Button */}
+              <button 
+                type="button"
+                onClick={() => setShowSearchFilters(prev => !prev)} 
+                className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                  showSearchFilters || selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL'
+                    ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 shadow-xs'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
+                }`}
+                title={showSearchFilters ? "إخفاء الفلاتر لعرض المزيد من الأسماء" : "إظهار الفلاتر"}
+              >
+                <Filter size={15} />
+                <span>{showSearchFilters ? 'إخفاء الفلاتر' : 'فلاتر'}</span>
+                {(selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL') && (
+                  <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                )}
+              </button>
+
+              {/* View Mode Switcher: Table vs Cards */}
+              <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                <button 
+                  onClick={() => setModernViewType('table')} 
+                  className={`p-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                    modernViewType === 'table' 
+                      ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs' 
+                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
+                  }`}
+                  title="عرض الجدول"
+                >
+                  <List size={15} />
+                </button>
+                <button 
+                  onClick={() => setModernViewType('grid')} 
+                  className={`p-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                    modernViewType === 'grid' 
+                      ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs' 
+                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
+                  }`}
+                  title="عرض البطاقات"
+                >
+                  <LayoutGrid size={15} />
+                </button>
+              </div>
+
+              <button 
+                onClick={() => setShowPrintTemplateModal(true)} 
+                className="p-2 bg-white dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs transition-colors cursor-pointer"
+                title="تخصيص أعمدة الطباعة"
+              >
+                <SlidersHorizontal size={16} />
               </button>
             </div>
-
-            <button 
-              onClick={() => setShowPrintTemplateModal(true)} 
-              className="p-2 bg-white dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs transition-colors cursor-pointer"
-              title="تخصيص أعمدة الطباعة"
-            >
-              <SlidersHorizontal size={16} />
-            </button>
-          </div>
+          )}
         </div>
 
-        {/* Filter Drawer Strip */}
-        {(showSearchFilters || selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL') && (
+        {/* Filter Drawer Strip - Fully collapsible even when filters are active */}
+        {showSearchFilters && (
           <div className="pt-2.5 border-t border-slate-200/80 dark:border-slate-800 space-y-2.5 animate-fade-in">
             {/* Select Dropdowns Row (including Status Dropdown) */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1436,24 +1456,34 @@ const ModernAppLayout = ({
               </select>
             </div>
 
-            <div className="flex items-center justify-between gap-2 pt-0.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
               <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
                 إجمالي النتائج: <span className="font-mono text-slate-700 dark:text-slate-200">{filtered.length}</span> طالب
               </div>
-              {(selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL') && (
-                <button 
+              <div className="flex items-center gap-1.5">
+                {(selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL') && (
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setSelectedRegFilter('');
+                      setStatusFilter('ALL');
+                      setYearFilter('ALL');
+                    }}
+                    className="bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-xl px-2.5 py-1.5 text-xs font-bold hover:bg-rose-100 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <RotateCcw size={13} />
+                    <span>إعادة ضبط</span>
+                  </button>
+                )}
+                <button
                   type="button"
-                  onClick={() => {
-                    setSelectedRegFilter('');
-                    setStatusFilter('ALL');
-                    setYearFilter('ALL');
-                  }}
-                  className="bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-xl px-3 py-1.5 text-xs font-bold hover:bg-rose-100 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                  onClick={() => setShowSearchFilters(false)}
+                  className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center justify-center gap-1 cursor-pointer"
                 >
-                  <RotateCcw size={13} />
-                  <span>إعادة ضبط الفلاتر</span>
+                  <X size={13} />
+                  <span>إخفاء الفلاتر</span>
                 </button>
-              )}
+              </div>
             </div>
           </div>
         )}
@@ -2881,6 +2911,7 @@ export default function App() {
           </div>
         )}
 
+        {!(inSearchMode && view === 'list') && (
         <header className="bg-white/90 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-40 shadow-xs backdrop-blur-md">
           <div className="max-w-7xl mx-auto px-2.5 sm:px-4 min-h-14 sm:min-h-16 py-1.5 sm:py-0 flex items-center justify-between gap-1.5 sm:gap-3">
             <div className="flex items-center gap-2 sm:gap-3 cursor-pointer select-none min-w-0 flex-1" onClick={() => setView('list')}>
@@ -2970,6 +3001,7 @@ export default function App() {
             </div>
           </div>
         </header>
+        )}
 
         <main className="max-w-7xl mx-auto px-4 py-4">
             {loading && students.length === 0 ? <SkeletonLoader /> : (
