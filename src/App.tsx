@@ -368,30 +368,265 @@ const unlockBackgroundScroll = () => {
   }
 };
 
-const Modal = ({ children, onClose, zIndex = "z-50", maxWidth = "max-w-lg" }: { children: React.ReactNode; onClose: () => void; zIndex?: string; maxWidth?: string }) => {
+const Modal = ({ children, onClose, zIndex = "z-50", maxWidth = "max-w-lg", dismissible = true }: { children: React.ReactNode; onClose: () => void; zIndex?: string; maxWidth?: string; dismissible?: boolean }) => {
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const handleRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  const swipeRef = useRef<{
+    active: boolean;
+    decided: boolean;
+    dismissing: boolean;
+    startX: number;
+    startY: number;
+    startTime: number;
+    currentDy: number;
+    fromHandle: boolean;
+  } | null>(null);
+  const closingTimerRef = useRef<number | null>(null);
+  const suppressBackdropClickRef = useRef(false);
+
   useEffect(() => {
     lockBackgroundScroll();
-    return () => unlockBackgroundScroll();
+    return () => {
+      unlockBackgroundScroll();
+      if (closingTimerRef.current !== null) {
+        window.clearTimeout(closingTimerRef.current);
+      }
+    };
   }, []);
+
+  useEffect(() => {
+    if (!dismissible) return;
+    const cardEl = cardRef.current;
+    if (!cardEl) return;
+
+    const isScrolledDown = (startEl: HTMLElement | null, stopEl: HTMLElement | null): boolean => {
+      let el: HTMLElement | null = startEl;
+      while (el) {
+        if (el.scrollTop > 2) return true;
+        if (el === stopEl) break;
+        el = el.parentElement;
+      }
+      if (stopEl && stopEl.scrollTop > 2) return true;
+      return false;
+    };
+
+    const applySwipeVisual = (dy: number) => {
+      if (cardRef.current) {
+        cardRef.current.style.transform = `translate3d(0, ${dy}px, 0)`;
+        cardRef.current.style.opacity = `${Math.max(0.35, 1 - dy / 460)}`;
+      }
+      if (overlayRef.current) {
+        const bgAlpha = Math.max(0.08, 0.6 * (1 - dy / 360));
+        overlayRef.current.style.backgroundColor = `rgba(15, 23, 42, ${bgAlpha})`;
+      }
+    };
+
+    const finishSwipe = (cancelled: boolean) => {
+      const st = swipeRef.current;
+      if (!st || !st.active || st.dismissing) return;
+
+      const dy = st.currentDy;
+      const dt = Math.max(16, performance.now() - st.startTime);
+      const velocity = dy / dt;
+      const shouldDismiss = !cancelled && (dy >= 90 || (dy >= 32 && velocity >= 0.45));
+
+      if (shouldDismiss) {
+        st.dismissing = true;
+        suppressBackdropClickRef.current = true;
+        if (cardRef.current) {
+          cardRef.current.style.transition = 'transform 180ms ease-out, opacity 180ms ease-out';
+          cardRef.current.style.transform = `translate3d(0, ${Math.max(window.innerHeight * 0.65, dy + 220)}px, 0)`;
+          cardRef.current.style.opacity = '0';
+          cardRef.current.style.pointerEvents = 'none';
+        }
+        if (overlayRef.current) {
+          overlayRef.current.style.transition = 'background-color 180ms ease-out';
+          overlayRef.current.style.backgroundColor = 'rgba(15, 23, 42, 0)';
+        }
+        closingTimerRef.current = window.setTimeout(() => {
+          onCloseRef.current();
+        }, 175);
+        return;
+      }
+
+      swipeRef.current = null;
+      if (dy > 0) {
+        suppressBackdropClickRef.current = true;
+        window.setTimeout(() => {
+          suppressBackdropClickRef.current = false;
+        }, 60);
+        if (cardRef.current) {
+          cardRef.current.style.transition = 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease-out';
+          cardRef.current.style.transform = 'translate3d(0, 0, 0)';
+          cardRef.current.style.opacity = '1';
+        }
+        if (overlayRef.current) {
+          overlayRef.current.style.transition = 'background-color 220ms ease-out';
+          overlayRef.current.style.backgroundColor = '';
+        }
+      }
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1 || swipeRef.current?.dismissing) return;
+      const target = e.target as HTMLElement | null;
+      const fromHandle = Boolean(handleRef.current && target && handleRef.current.contains(target));
+
+      if (!fromHandle && target) {
+        if (target.closest('input[type="range"], textarea, select, [contenteditable="true"], .no-swipe-dismiss')) {
+          return;
+        }
+        if (isScrolledDown(target, overlayRef.current)) {
+          return;
+        }
+      }
+
+      swipeRef.current = {
+        active: true,
+        decided: fromHandle,
+        dismissing: false,
+        startX: e.touches[0].clientX,
+        startY: e.touches[0].clientY,
+        startTime: performance.now(),
+        currentDy: 0,
+        fromHandle,
+      };
+
+      if (cardRef.current) cardRef.current.style.transition = 'none';
+      if (overlayRef.current) overlayRef.current.style.transition = 'none';
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const st = swipeRef.current;
+      if (!st || !st.active || st.dismissing) return;
+      if (e.touches.length !== 1) {
+        finishSwipe(true);
+        return;
+      }
+
+      const dx = e.touches[0].clientX - st.startX;
+      const dy = e.touches[0].clientY - st.startY;
+
+      if (!st.decided) {
+        if (Math.hypot(dx, dy) < 8) return;
+        if (dy <= 0 || Math.abs(dx) > dy * 0.9 || isScrolledDown(e.target as HTMLElement | null, overlayRef.current)) {
+          swipeRef.current = null;
+          return;
+        }
+        st.decided = true;
+      }
+
+      const clampedDy = Math.max(0, dy);
+      if (clampedDy > 0 || st.currentDy > 0) {
+        if (e.cancelable) e.preventDefault();
+      } else if (st.fromHandle && dy < -12) {
+        // Ignore upward drag on the handle
+        return;
+      }
+
+      st.currentDy = clampedDy;
+      applySwipeVisual(clampedDy);
+    };
+
+    const onTouchEnd = () => finishSwipe(false);
+    const onTouchCancel = () => finishSwipe(true);
+
+    cardEl.addEventListener('touchstart', onTouchStart, { passive: true });
+    cardEl.addEventListener('touchmove', onTouchMove, { passive: false });
+    cardEl.addEventListener('touchend', onTouchEnd, { passive: true });
+    cardEl.addEventListener('touchcancel', onTouchCancel, { passive: true });
+
+    // Optional downward mouse pull on the top handle pill
+    const handleEl = handleRef.current;
+    let mouseDragging = false;
+    const onHandleMouseDown = (e: MouseEvent) => {
+      if (e.button !== 0 || swipeRef.current?.dismissing) return;
+      e.preventDefault();
+      e.stopPropagation();
+      mouseDragging = true;
+      swipeRef.current = {
+        active: true,
+        decided: true,
+        dismissing: false,
+        startX: e.clientX,
+        startY: e.clientY,
+        startTime: performance.now(),
+        currentDy: 0,
+        fromHandle: true,
+      };
+      if (cardRef.current) cardRef.current.style.transition = 'none';
+      if (overlayRef.current) overlayRef.current.style.transition = 'none';
+    };
+    const onWindowMouseMove = (e: MouseEvent) => {
+      if (!mouseDragging || !swipeRef.current?.active || swipeRef.current.dismissing) return;
+      const clampedDy = Math.max(0, e.clientY - swipeRef.current.startY);
+      swipeRef.current.currentDy = clampedDy;
+      applySwipeVisual(clampedDy);
+    };
+    const onWindowMouseUp = () => {
+      if (!mouseDragging) return;
+      mouseDragging = false;
+      finishSwipe(false);
+    };
+
+    if (handleEl) {
+      handleEl.addEventListener('mousedown', onHandleMouseDown);
+      window.addEventListener('mousemove', onWindowMouseMove);
+      window.addEventListener('mouseup', onWindowMouseUp);
+    }
+
+    return () => {
+      cardEl.removeEventListener('touchstart', onTouchStart);
+      cardEl.removeEventListener('touchmove', onTouchMove);
+      cardEl.removeEventListener('touchend', onTouchEnd);
+      cardEl.removeEventListener('touchcancel', onTouchCancel);
+      if (handleEl) {
+        handleEl.removeEventListener('mousedown', onHandleMouseDown);
+        window.removeEventListener('mousemove', onWindowMouseMove);
+        window.removeEventListener('mouseup', onWindowMouseUp);
+      }
+    };
+  }, [dismissible]);
 
   return (
     <div 
+      ref={overlayRef}
       className={`fixed inset-0 bg-slate-900/60 ${zIndex} flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm overflow-y-auto overscroll-contain modal-overlay`} 
-      onClick={onClose}
+      onClick={() => {
+        if (!dismissible || suppressBackdropClickRef.current) return;
+        onClose();
+      }}
       style={{ left: 0, top: 0, right: 0, bottom: 0, width: '100%', height: '100dvh' }}
     >
       <div 
-        className={`w-full ${maxWidth} relative my-auto mx-auto`} 
+        ref={cardRef}
+        className={`w-full ${maxWidth} relative my-auto mx-auto will-change-transform`} 
         onClick={e => e.stopPropagation()}
       >
-          <button 
-              onClick={onClose} 
-              className="absolute top-2.5 left-2.5 p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full shadow-md transition-all z-[60]"
-              title="إغلاق"
-              type="button"
-          >
-              <X size={18} />
-          </button>
+          {dismissible && (
+            <>
+              {/* Top Swipe-Down Handle Pill (swipe down to dismiss modal) */}
+              <div
+                ref={handleRef}
+                className="absolute top-1 left-1/2 -translate-x-1/2 z-[60] px-12 py-2.5 flex items-center justify-center touch-none select-none cursor-grab active:cursor-grabbing"
+                title="اسحب للأسفل لإغلاق النافذة"
+              >
+                <span className="w-12 h-1.5 rounded-full bg-slate-300/90 dark:bg-slate-600 transition-colors hover:bg-slate-400" />
+              </div>
+              <button 
+                  onClick={onClose} 
+                  className="absolute top-2.5 left-2.5 p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full shadow-md transition-all z-[60]"
+                  title="إغلاق"
+                  type="button"
+              >
+                  <X size={18} />
+              </button>
+            </>
+          )}
           {children}
       </div>
     </div>
@@ -2458,6 +2693,15 @@ export default function App() {
     return (localStorage.getItem('uiDesignMode') as 'modern' | 'classic') || 'modern';
   });
   const [modernViewType, setModernViewType] = useState<'table' | 'grid'>('table');
+  const [trashSearch, setTrashSearch] = useState('');
+  const [appViewportWidth, setAppViewportWidth] = useState<number>(() =>
+    typeof window !== 'undefined' ? window.innerWidth : 390
+  );
+  useEffect(() => {
+    const onResize = () => setAppViewportWidth(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   
   // Enhanced features
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -3210,6 +3454,27 @@ export default function App() {
   }, [students, studentSearchIndex, debouncedQuery, selectedRegFilter, statusFilter, sortBy, yearFilter, view]);
 
   const displayed = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
+
+  const trashTotalCount = useMemo(() => students.filter(s => s.isDeleted).length, [students]);
+  const trashItems = useMemo(() => {
+    if (view !== 'trash') return [];
+    const deleted = students.filter(s => s.isDeleted);
+    const prepared = prepareArabicQuery(trashSearch);
+    if (prepared.normQueryNoSpace) {
+      const ranked: { student: Student; rank: number }[] = [];
+      for (let i = 0; i < deleted.length; i++) {
+        const s = deleted[i];
+        const entry = studentSearchIndex.get(s.id);
+        const rank = entry
+          ? getStudentSearchRankFast(entry, prepared)
+          : getStudentSearchRank(s, trashSearch);
+        if (rank !== -1) ranked.push({ student: s, rank });
+      }
+      ranked.sort((a, b) => a.rank !== b.rank ? a.rank - b.rank : b.student.createdAt - a.student.createdAt);
+      return ranked.map(item => item.student);
+    }
+    return deleted.sort((a, b) => b.createdAt - a.createdAt);
+  }, [students, studentSearchIndex, trashSearch, view]);
   
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -3342,55 +3607,230 @@ export default function App() {
             {loading && students.length === 0 ? <SkeletonLoader /> : (
                 <div className="animate-fade-in space-y-4">
                   {view === 'trash' && (
-                    <div className="space-y-4 animate-slide-up">
-                      <div className="flex items-center justify-between bg-red-50 p-4 rounded-2xl border border-red-200 shadow-xs">
-                          <div className="flex items-center gap-2 text-red-700 font-bold text-sm">
-                              <Trash2 size={20} />
-                              <span>سلة المحذوفات ({filtered.length} سجل محذوف)</span>
+                    <div className="space-y-3 animate-slide-up">
+                      {/* Clean Trash Header Banner */}
+                      <div className="flex items-center justify-between gap-2 bg-red-50/90 dark:bg-red-950/30 px-3.5 py-3 rounded-2xl border border-red-200/80 dark:border-red-900/50 shadow-xs">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-9 h-9 rounded-xl bg-red-100 dark:bg-red-900/60 text-red-600 dark:text-red-300 flex items-center justify-center shrink-0">
+                            <Trash2 size={18} />
                           </div>
-                          <button onClick={() => setView('list')} className="flex items-center gap-2 bg-white text-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm hover:bg-slate-50 transition-colors"><ArrowLeft size={16}/> العودة إلى الرئيسية</button>
+                          <div className="min-w-0">
+                            <div className="text-red-800 dark:text-red-200 font-black text-sm leading-tight truncate">سلة المحذوفات</div>
+                            <div className="text-[11px] font-bold text-red-600/80 dark:text-red-400/90 mt-0.5">
+                              {trashTotalCount === 0
+                                ? 'لا توجد سجلات محذوفة'
+                                : trashSearch.trim()
+                                  ? `${trashItems.length} من ${trashTotalCount} سجل محذوف`
+                                  : `${trashTotalCount} سجل محذوف`}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => { setTrashSearch(''); setView('list'); }}
+                          className="flex items-center gap-1.5 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 px-3 py-2 rounded-xl text-xs font-bold shadow-xs border border-red-200/70 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shrink-0 whitespace-nowrap"
+                        >
+                          <ArrowLeft size={15} />
+                          <span>العودة للرئيسية</span>
+                        </button>
                       </div>
 
-                      {filtered.length === 0 ? (
-                        <div className="text-center py-12 bg-white rounded-2xl border border-slate-100 p-6 shadow-xs">
-                          <div className="w-12 h-12 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-3">
+                      {/* Quick Search Inside Trash */}
+                      {trashTotalCount > 0 && (
+                        <div className="relative flex items-center bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 px-3 py-1.5 shadow-2xs focus-within:ring-2 focus-within:ring-red-200">
+                          <Search className="text-slate-400 ml-2 shrink-0" size={16} />
+                          <input
+                            type="text"
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                            value={trashSearch}
+                            onChange={(e) => setTrashSearch(e.target.value)}
+                            placeholder="ابحث داخل سلة المحذوفات..."
+                            className="flex-1 bg-transparent outline-none text-slate-800 dark:text-slate-100 font-bold text-xs sm:text-sm placeholder:text-slate-400 min-w-0 h-7"
+                          />
+                          {trashSearch.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setTrashSearch('')}
+                              className="p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 transition-colors shrink-0"
+                              title="مسح البحث"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {trashItems.length === 0 ? (
+                        <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-6 shadow-xs">
+                          <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-3">
                             <Trash2 size={22} />
                           </div>
-                          <div className="font-bold text-slate-700 text-sm">سلة المحذوفات فارغة</div>
-                          <div className="text-xs text-slate-400 mt-1">لا توجد سجلات محذوفة حالياً</div>
+                          <div className="font-bold text-slate-700 dark:text-slate-200 text-sm">
+                            {trashTotalCount === 0 ? 'سلة المحذوفات فارغة' : 'لا توجد نتائج مطابقة'}
+                          </div>
+                          <div className="text-xs text-slate-400 mt-1">
+                            {trashTotalCount === 0 ? 'لا توجد سجلات محذوفة حالياً' : 'جرّب البحث باسم آخر أو امسح مربع البحث'}
+                          </div>
                         </div>
                       ) : (
-                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                          <table className="w-full text-right border-collapse">
-                            <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 text-[11px] font-bold">
-                              <tr>
-                                <th className="px-4 py-2.5 w-12 text-center">#</th>
-                                <th className="px-4 py-2.5">اسم الطالب</th>
-                                <th className="px-4 py-2.5 w-24 text-center">الصفحة</th>
-                                <th className="px-4 py-2.5 w-28 text-center">رقم القيد</th>
-                                <th className="px-4 py-2.5 w-36 text-center">الإجراءات</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 text-xs">
-                              {filtered.map((s, idx) => (
-                                <tr key={s.id} className="hover:bg-red-50/30 transition-all border-b border-slate-50 h-11">
-                                  <td className="px-4 py-2 text-center text-slate-400 font-mono">{idx + 1}</td>
-                                  <td className="px-4 py-2 font-bold text-slate-800">
-                                    {cleanName(s.firstName)}{s.lastName ? ` / ${s.lastName}` : ''}
-                                  </td>
-                                  <td className="px-4 py-2 text-center"><span className="bg-[#FFA500] text-white px-2 py-0.5 rounded-md font-mono text-[10px]">{s.pageNumber}</span></td>
-                                  <td className="px-4 py-2 text-center"><span className={`${currentTheme.primary} text-white px-2 py-0.5 rounded-md font-mono text-[10px]`}>{s.regNumber}</span></td>
-                                  <td className="px-4 py-2 text-center">
-                                    <div className="flex gap-1.5 justify-center">
-                                      <button onClick={() => handleRestore(s.id)} className="px-2.5 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors" title="استعادة"><RotateCcw size={13}/> استعادة</button>
-                                      <button onClick={() => handleDeleteForever(s.id)} className="px-2.5 py-1 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors" title="حذف نهائي"><Trash2 size={13}/> حذف نهائي</button>
+                        <>
+                          {/* Mobile Responsive Cards (< md): Full-width single-line name + blue surname + compact badges & actions */}
+                          <div className="md:hidden space-y-2.5">
+                            {trashItems.map((s, idx) => {
+                              const displayFull = `#${idx + 1} ${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`;
+                              const availWidth = Math.max(210, appViewportWidth - 64);
+                              const fittedFontSize = getSingleLineFontSize(displayFull, availWidth, 14, 7.5, 700);
+                              return (
+                                <div
+                                  key={s.id}
+                                  className="bg-white dark:bg-slate-900 rounded-2xl px-3.5 py-3 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-2.5"
+                                >
+                                  {/* Line 1: 100% Full-Width Single-Line Name + Inline Blue Surname */}
+                                  <div
+                                    className="w-full min-w-0 font-bold text-slate-900 dark:text-slate-100 leading-snug whitespace-nowrap overflow-hidden"
+                                    style={{ fontSize: `${fittedFontSize}px` }}
+                                    title={`${cleanName(s.firstName)}${s.lastName ? ` (${s.lastName})` : ''}`}
+                                  >
+                                    <span className="font-mono tabular-nums text-[0.82em] font-bold text-slate-400 ml-1">
+                                      #{idx + 1}
+                                    </span>
+                                    <span>{cleanName(s.firstName)}</span>
+                                    {s.lastName && (
+                                      <span className="text-blue-600 dark:text-blue-400 font-bold mr-1">
+                                        ({s.lastName})
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Line 2: Metadata Badges + Restore / Permanent Delete Buttons */}
+                                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                                    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                      <span
+                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold border shrink-0 ${
+                                          s.status === 'graduated' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800' :
+                                          s.status === 'left' ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800' :
+                                          s.status === 'transferred' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800' :
+                                          'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
+                                        }`}
+                                      >
+                                        <span className={`w-1.5 h-1.5 rounded-full ${
+                                          s.status === 'graduated' ? 'bg-blue-600' :
+                                          s.status === 'left' ? 'bg-rose-600' :
+                                          s.status === 'transferred' ? 'bg-amber-600' :
+                                          'bg-emerald-600'
+                                        }`}></span>
+                                        <span>{s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}</span>
+                                      </span>
+
+                                      <span className={`${currentTheme.primary} text-white px-2 py-0.5 rounded-lg font-mono tabular-nums font-bold text-[11px] whitespace-nowrap`}>
+                                        قيد {s.regNumber}
+                                      </span>
+
+                                      <span className="bg-amber-50 text-amber-900 border border-amber-200/80 dark:bg-amber-950/70 dark:text-amber-300 dark:border-amber-800 px-2 py-0.5 rounded-lg font-mono tabular-nums font-bold text-[11px] whitespace-nowrap">
+                                        ص {s.pageNumber}
+                                      </span>
                                     </div>
-                                  </td>
+
+                                    <div className="flex items-center gap-1.5 shrink-0 mr-auto">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRestore(s.id)}
+                                        className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800 rounded-lg font-bold text-[11px] flex items-center gap-1 transition-colors whitespace-nowrap active:scale-95"
+                                        title="استعادة السجل"
+                                      >
+                                        <RotateCcw size={12} />
+                                        <span>استعادة</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteForever(s.id)}
+                                        className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800 rounded-lg font-bold text-[11px] flex items-center gap-1 transition-colors whitespace-nowrap active:scale-95"
+                                        title="حذف نهائي"
+                                      >
+                                        <Trash2 size={12} />
+                                        <span>حذف</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Desktop Table View (>= md) */}
+                          <div className="hidden md:block bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+                            <table className="w-full text-right border-collapse">
+                              <thead className="bg-slate-50/80 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300 text-[11px] font-bold">
+                                <tr>
+                                  <th className="px-4 py-2.5 w-12 text-center">#</th>
+                                  <th className="px-4 py-2.5">اسم الطالب</th>
+                                  <th className="px-4 py-2.5 w-24 text-center">الحالة</th>
+                                  <th className="px-4 py-2.5 w-24 text-center">الصفحة</th>
+                                  <th className="px-4 py-2.5 w-24 text-center">رقم القيد</th>
+                                  <th className="px-4 py-2.5 w-44 text-center">الإجراءات</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                                {trashItems.map((s, idx) => (
+                                  <tr key={s.id} className="hover:bg-red-50/30 dark:hover:bg-red-950/20 transition-all h-12">
+                                    <td className="px-4 py-2 text-center text-slate-400 font-mono">{idx + 1}</td>
+                                    <td className="px-4 py-2 font-bold text-slate-800 dark:text-slate-100 text-sm whitespace-nowrap">
+                                      <span>{cleanName(s.firstName)}</span>
+                                      {s.lastName && (
+                                        <span className="text-blue-600 dark:text-blue-400 font-bold mr-1.5">
+                                          ({s.lastName})
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-4 py-2 text-center">
+                                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                                        s.status === 'graduated' ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300' :
+                                        s.status === 'left' ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300' :
+                                        s.status === 'transferred' ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300' :
+                                        'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                      }`}>
+                                        {s.status === 'graduated' ? 'متخرج' : s.status === 'left' ? 'تارك' : s.status === 'transferred' ? 'منقول' : 'مستمر'}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-2 text-center">
+                                      <span className="bg-amber-50 text-amber-900 border border-amber-200/80 dark:bg-amber-950/70 dark:text-amber-300 dark:border-amber-800 px-2.5 py-0.5 rounded-md font-mono font-bold text-[11px] whitespace-nowrap">
+                                        {s.pageNumber}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-2 text-center">
+                                      <span className={`${currentTheme.primary} text-white px-2.5 py-0.5 rounded-md font-mono font-bold text-[11px] whitespace-nowrap`}>
+                                        {s.regNumber}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-2 text-center">
+                                      <div className="flex gap-1.5 justify-center">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRestore(s.id)}
+                                          className="px-2.5 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/80 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors whitespace-nowrap"
+                                          title="استعادة"
+                                        >
+                                          <RotateCcw size={13} /> استعادة
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteForever(s.id)}
+                                          className="px-2.5 py-1 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200/80 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors whitespace-nowrap"
+                                          title="حذف نهائي"
+                                        >
+                                          <Trash2 size={13} /> حذف نهائي
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </>
                       )}
                     </div>
                   )}
@@ -4907,87 +5347,89 @@ export default function App() {
 
           return (
             <Modal onClose={() => setView('list')} maxWidth="max-w-5xl">
-              <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-4 sm:p-6 space-y-5 max-h-[88vh] flex flex-col w-full text-right border border-slate-100 dark:border-slate-800">
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-2xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 shadow-xs">
-                      <BarChart3 size={24} />
-                    </div>
-                    <div>
-                      <h2 className="text-base sm:text-lg font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                        لوحة الإحصائيات والرسوم البيانية
-                      </h2>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        تحليل بياني وتوزيع حالات الطلاب عبر دفاتر القيود
-                      </p>
-                    </div>
+              <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl pt-7 px-4 pb-4 sm:p-6 space-y-4 max-h-[88vh] flex flex-col w-full text-right border border-slate-100 dark:border-slate-800">
+                {/* Header (clear of Modal's top drag handle and left X button) */}
+                <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-3 pl-9">
+                  <div className="p-2.5 rounded-2xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 shadow-xs shrink-0">
+                    <BarChart3 size={22} />
                   </div>
-                  <button 
-                    onClick={() => setView('list')} 
-                    className="p-1.5 rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                  >
-                    <X size={18} />
-                  </button>
+                  <div className="min-w-0">
+                    <h2 className="text-base sm:text-lg font-black text-slate-800 dark:text-slate-100 leading-tight truncate">
+                      لوحة الإحصائيات والرسوم البيانية
+                    </h2>
+                    <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                      توزيع حالات الطلاب عبر دفاتر القيود
+                    </p>
+                  </div>
                 </div>
 
-                <div className="overflow-y-auto flex-1 custom-scrollbar space-y-5 pr-1 pl-1">
-                  {/* Summary Metric Chips */}
+                <div className="overflow-y-auto flex-1 custom-scrollbar space-y-4 px-0.5">
+                  {/* Summary Metric Cards (Symmetric 1 + 2x2 on mobile, 5 columns on desktop) */}
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-                    <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700">
-                      <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400">إجمالي الطلاب</div>
-                      <div className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100 font-mono mt-0.5">{grandTotal}</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">100% من المسجلين</div>
+                    <div className="col-span-2 sm:col-span-1 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex sm:block items-center justify-between">
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400">إجمالي الطلاب</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5"><span dir="ltr">100%</span> من المسجلين</div>
+                      </div>
+                      <div className="text-2xl font-black text-slate-800 dark:text-slate-100 font-mono sm:mt-1">{grandTotal}</div>
                     </div>
                     <div className="bg-emerald-50/70 dark:bg-emerald-950/30 p-3 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/60">
-                      <div className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span> مستمر
+                      <div className="flex items-center justify-between">
+                        <div className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span> مستمر
+                        </div>
+                        <span dir="ltr" className="text-[10px] font-bold text-emerald-600/90 dark:text-emerald-400 bg-emerald-100/70 dark:bg-emerald-900/50 px-1.5 py-0.5 rounded-md">
+                          {grandTotal > 0 ? Math.round((activeTotal / grandTotal) * 100) : 0}%
+                        </span>
                       </div>
-                      <div className="text-xl sm:text-2xl font-black text-emerald-700 dark:text-emerald-400 font-mono mt-0.5">{activeTotal}</div>
-                      <div className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 mt-0.5">
-                        {grandTotal > 0 ? Math.round((activeTotal / grandTotal) * 100) : 0}%
-                      </div>
+                      <div className="text-xl sm:text-2xl font-black text-emerald-700 dark:text-emerald-400 font-mono mt-1">{activeTotal}</div>
                     </div>
                     <div className="bg-amber-50/70 dark:bg-amber-950/30 p-3 rounded-2xl border border-amber-200/80 dark:border-amber-900/60">
-                      <div className="text-[11px] font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-amber-500"></span> منقول / وثيقة
+                      <div className="flex items-center justify-between">
+                        <div className="text-[11px] font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-amber-500"></span> منقول
+                        </div>
+                        <span dir="ltr" className="text-[10px] font-bold text-amber-700/90 dark:text-amber-400 bg-amber-100/70 dark:bg-amber-900/50 px-1.5 py-0.5 rounded-md">
+                          {grandTotal > 0 ? Math.round((transferredTotal / grandTotal) * 100) : 0}%
+                        </span>
                       </div>
-                      <div className="text-xl sm:text-2xl font-black text-amber-700 dark:text-amber-400 font-mono mt-0.5">{transferredTotal}</div>
-                      <div className="text-[10px] text-amber-600/80 dark:text-amber-400/80 mt-0.5">
-                        {grandTotal > 0 ? Math.round((transferredTotal / grandTotal) * 100) : 0}%
-                      </div>
+                      <div className="text-xl sm:text-2xl font-black text-amber-700 dark:text-amber-400 font-mono mt-1">{transferredTotal}</div>
                     </div>
                     <div className="bg-rose-50/70 dark:bg-rose-950/30 p-3 rounded-2xl border border-rose-200/80 dark:border-rose-900/60">
-                      <div className="text-[11px] font-bold text-rose-800 dark:text-rose-300 flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-rose-500"></span> تارك
+                      <div className="flex items-center justify-between">
+                        <div className="text-[11px] font-bold text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-rose-500"></span> تارك
+                        </div>
+                        <span dir="ltr" className="text-[10px] font-bold text-rose-600/90 dark:text-rose-400 bg-rose-100/70 dark:bg-rose-900/50 px-1.5 py-0.5 rounded-md">
+                          {grandTotal > 0 ? Math.round((leftTotal / grandTotal) * 100) : 0}%
+                        </span>
                       </div>
-                      <div className="text-xl sm:text-2xl font-black text-rose-700 dark:text-rose-400 font-mono mt-0.5">{leftTotal}</div>
-                      <div className="text-[10px] text-rose-600/80 dark:text-rose-400/80 mt-0.5">
-                        {grandTotal > 0 ? Math.round((leftTotal / grandTotal) * 100) : 0}%
-                      </div>
+                      <div className="text-xl sm:text-2xl font-black text-rose-700 dark:text-rose-400 font-mono mt-1">{leftTotal}</div>
                     </div>
-                    <div className="col-span-2 sm:col-span-1 bg-blue-50/70 dark:bg-blue-950/30 p-3 rounded-2xl border border-blue-200/80 dark:border-blue-900/60">
-                      <div className="text-[11px] font-bold text-blue-800 dark:text-blue-300 flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-blue-500"></span> متخرج
+                    <div className="bg-blue-50/70 dark:bg-blue-950/30 p-3 rounded-2xl border border-blue-200/80 dark:border-blue-900/60">
+                      <div className="flex items-center justify-between">
+                        <div className="text-[11px] font-bold text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-blue-500"></span> متخرج
+                        </div>
+                        <span dir="ltr" className="text-[10px] font-bold text-blue-600/90 dark:text-blue-400 bg-blue-100/70 dark:bg-blue-900/50 px-1.5 py-0.5 rounded-md">
+                          {grandTotal > 0 ? Math.round((graduatedTotal / grandTotal) * 100) : 0}%
+                        </span>
                       </div>
-                      <div className="text-xl sm:text-2xl font-black text-blue-700 dark:text-blue-400 font-mono mt-0.5">{graduatedTotal}</div>
-                      <div className="text-[10px] text-blue-600/80 dark:text-blue-400/80 mt-0.5">
-                        {grandTotal > 0 ? Math.round((graduatedTotal / grandTotal) * 100) : 0}%
-                      </div>
+                      <div className="text-xl sm:text-2xl font-black text-blue-700 dark:text-blue-400 font-mono mt-1">{graduatedTotal}</div>
                     </div>
                   </div>
 
                   {/* Recharts Graphical Visualizations */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
                     {/* 1. Status Distribution Donut Chart */}
-                    <div className="p-4 bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex flex-col">
+                    <div className="p-3.5 sm:p-4 bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex flex-col">
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                           <span>🥧</span> توزيع الطلاب حسب الحالة
                         </h3>
-                        <span className="text-[10px] font-bold text-slate-400">مخطط دائري تفاعلي</span>
+                        <span className="text-[10px] font-bold text-slate-400">مخطط دائري</span>
                       </div>
-                      <div className="h-64 w-full flex items-center justify-center">
+                      <div className="h-56 sm:h-64 w-full flex items-center justify-center">
                         {pieData.length > 0 ? (
                           <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
@@ -4995,8 +5437,8 @@ export default function App() {
                                 data={pieData}
                                 cx="50%"
                                 cy="50%"
-                                innerRadius={55}
-                                outerRadius={80}
+                                innerRadius={50}
+                                outerRadius={76}
                                 paddingAngle={3}
                                 dataKey="value"
                               >
@@ -5018,7 +5460,7 @@ export default function App() {
                               />
                               <Legend 
                                 verticalAlign="bottom" 
-                                height={36} 
+                                height={34} 
                                 formatter={(value) => <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mx-1">{value}</span>}
                               />
                             </PieChart>
@@ -5030,17 +5472,17 @@ export default function App() {
                     </div>
 
                     {/* 2. Registration Books Stacked Bar Chart */}
-                    <div className="p-4 bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex flex-col">
+                    <div className="p-3.5 sm:p-4 bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex flex-col">
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                           <span>📊</span> توزيع الحالات حسب دفتر القيد
                         </h3>
                         <span className="text-[10px] font-bold text-slate-400">{barData.length} دفاتر قيد</span>
                       </div>
-                      <div className="h-64 w-full flex items-center justify-center">
+                      <div className="h-56 sm:h-64 w-full flex items-center justify-center">
                         {barData.length > 0 ? (
                           <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <BarChart data={barData} margin={{ top: 10, right: 6, left: -18, bottom: 0 }}>
                               <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 'bold' }} />
                               <YAxis tick={{ fontSize: 10 }} />
                               <Tooltip 
@@ -5057,7 +5499,7 @@ export default function App() {
                               />
                               <Legend 
                                 verticalAlign="bottom" 
-                                height={36} 
+                                height={34} 
                                 formatter={(value) => <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mx-1">{value}</span>}
                               />
                               <Bar dataKey="مستمر" fill="#10b981" stackId="a" />
@@ -5073,51 +5515,137 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Detailed Table Breakdown */}
-                  <div className="space-y-2">
-                    <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                      <span>📑</span> جدول تفاصيل القيود
-                    </h3>
-                    <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+                  {/* Detailed Breakdown by Registration Book */}
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                        <span>📑</span> تفاصيل القيود ({regStats.length})
+                      </h3>
+                      <span className="text-[10px] font-bold text-slate-400">انقر على أي قيد لعرض طلابه</span>
+                    </div>
+
+                    {/* Mobile Cards (< md): Clean, non-wrapping badges + visual distribution bar */}
+                    <div className="md:hidden space-y-2.5">
+                      {regStats.length > 0 ? regStats.map((item) => {
+                        const pctActive = item.total > 0 ? Math.round((item.active / item.total) * 100) : 0;
+                        const pctTransferred = item.total > 0 ? Math.round((item.transferred / item.total) * 100) : 0;
+                        const pctLeft = item.total > 0 ? Math.round((item.left / item.total) * 100) : 0;
+                        const pctGraduated = item.total > 0 ? Math.round((item.graduated / item.total) * 100) : 0;
+                        return (
+                          <div
+                            key={item.reg}
+                            onClick={() => { setSelectedRegFilter(item.reg); setView('list'); }}
+                            className="bg-slate-50/70 dark:bg-slate-800/50 rounded-2xl p-3 border border-slate-200/80 dark:border-slate-700/80 space-y-2.5 cursor-pointer active:scale-[0.99] transition-transform"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`${currentTheme.primary} text-white px-2.5 py-1 rounded-lg font-mono text-xs font-bold whitespace-nowrap inline-flex items-center`}>
+                                قيد {item.reg}
+                              </span>
+                              <div className="flex items-center gap-1.5 whitespace-nowrap">
+                                <span className="text-sm font-black text-slate-900 dark:text-slate-100 font-mono">{item.total}</span>
+                                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">طالب</span>
+                              </div>
+                            </div>
+
+                            {/* Visual Stacked Distribution Bar */}
+                            <div className="w-full h-2 rounded-full bg-slate-200/80 dark:bg-slate-700 overflow-hidden flex">
+                              {item.active > 0 && <div style={{ width: `${(item.active / item.total) * 100}%` }} className="bg-emerald-500 h-full" />}
+                              {item.transferred > 0 && <div style={{ width: `${(item.transferred / item.total) * 100}%` }} className="bg-amber-500 h-full" />}
+                              {item.left > 0 && <div style={{ width: `${(item.left / item.total) * 100}%` }} className="bg-rose-500 h-full" />}
+                              {item.graduated > 0 && <div style={{ width: `${(item.graduated / item.total) * 100}%` }} className="bg-blue-500 h-full" />}
+                            </div>
+
+                            <div className="flex flex-wrap gap-1.5 text-[11px] font-bold">
+                              {item.active > 0 && (
+                                <span className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-lg border border-emerald-200/80 dark:border-emerald-800 whitespace-nowrap inline-flex items-center gap-1">
+                                  <span>مستمر: {item.active}</span>
+                                  <span dir="ltr" className="opacity-80">({pctActive}%)</span>
+                                </span>
+                              )}
+                              {item.transferred > 0 && (
+                                <span className="bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-lg border border-amber-200/80 dark:border-amber-800 whitespace-nowrap inline-flex items-center gap-1">
+                                  <span>منقول: {item.transferred}</span>
+                                  <span dir="ltr" className="opacity-80">({pctTransferred}%)</span>
+                                </span>
+                              )}
+                              {item.left > 0 && (
+                                <span className="bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 px-2 py-0.5 rounded-lg border border-rose-200/80 dark:border-rose-800 whitespace-nowrap inline-flex items-center gap-1">
+                                  <span>تارك: {item.left}</span>
+                                  <span dir="ltr" className="opacity-80">({pctLeft}%)</span>
+                                </span>
+                              )}
+                              {item.graduated > 0 && (
+                                <span className="bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-lg border border-blue-200/80 dark:border-blue-800 whitespace-nowrap inline-flex items-center gap-1">
+                                  <span>متخرج: {item.graduated}</span>
+                                  <span dir="ltr" className="opacity-80">({pctGraduated}%)</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      }) : (
+                        <div className="p-6 text-center text-slate-400 font-bold text-xs bg-slate-50 rounded-2xl">لا توجد بيانات متاحة</div>
+                      )}
+                    </div>
+
+                    {/* Desktop Table (>= md) */}
+                    <div className="hidden md:block overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
                       <table className="w-full text-right border-collapse text-xs">
-                        <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold sticky top-0">
+                        <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold">
                           <tr>
-                            <th className="p-3">رقم القيد</th>
-                            <th className="p-3 text-center">إجمالي الطلاب</th>
+                            <th className="p-3 w-28">رقم القيد</th>
+                            <th className="p-3 w-28 text-center">إجمالي الطلاب</th>
+                            <th className="p-3 w-40">نسبة التوزيع</th>
                             <th className="p-3">تفصيل الحالات</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                           {regStats.length > 0 ? regStats.map((item) => (
-                            <tr key={item.reg} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                              <td className="p-3 font-bold text-slate-800 dark:text-slate-200 align-top">
-                                <span className={`${currentTheme.primary} text-white px-2.5 py-0.5 rounded-lg font-mono text-xs font-bold`}>
+                            <tr
+                              key={item.reg}
+                              onClick={() => { setSelectedRegFilter(item.reg); setView('list'); }}
+                              className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
+                            >
+                              <td className="p-3 font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                                <span className={`${currentTheme.primary} text-white px-2.5 py-0.5 rounded-lg font-mono text-xs font-bold whitespace-nowrap inline-block`}>
                                   قيد {item.reg}
                                 </span>
                               </td>
-                              <td className="p-3 font-black text-slate-900 dark:text-slate-100 text-center font-mono align-top">
+                              <td className="p-3 font-black text-slate-900 dark:text-slate-100 text-center font-mono whitespace-nowrap">
                                 {item.total} طالب
                               </td>
                               <td className="p-3">
-                                <div className="flex flex-wrap gap-1.5 text-[10px] font-bold">
+                                <div className="w-full h-2.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden flex">
+                                  {item.active > 0 && <div style={{ width: `${(item.active / item.total) * 100}%` }} className="bg-emerald-500 h-full" title={`مستمر: ${item.active}`} />}
+                                  {item.transferred > 0 && <div style={{ width: `${(item.transferred / item.total) * 100}%` }} className="bg-amber-500 h-full" title={`منقول: ${item.transferred}`} />}
+                                  {item.left > 0 && <div style={{ width: `${(item.left / item.total) * 100}%` }} className="bg-rose-500 h-full" title={`تارك: ${item.left}`} />}
+                                  {item.graduated > 0 && <div style={{ width: `${(item.graduated / item.total) * 100}%` }} className="bg-blue-500 h-full" title={`متخرج: ${item.graduated}`} />}
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                <div className="flex flex-wrap gap-1.5 text-[11px] font-bold">
                                   {item.active > 0 && (
-                                    <span className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                                      مستمر: {item.active} ({item.total > 0 ? Math.round((item.active / item.total) * 100) : 0}%)
+                                    <span className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800 whitespace-nowrap inline-flex items-center gap-1">
+                                      <span>مستمر: {item.active}</span>
+                                      <span dir="ltr">({item.total > 0 ? Math.round((item.active / item.total) * 100) : 0}%)</span>
                                     </span>
                                   )}
                                   {item.transferred > 0 && (
-                                    <span className="bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800">
-                                      منقول: {item.transferred} ({item.total > 0 ? Math.round((item.transferred / item.total) * 100) : 0}%)
+                                    <span className="bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800 whitespace-nowrap inline-flex items-center gap-1">
+                                      <span>منقول: {item.transferred}</span>
+                                      <span dir="ltr">({item.total > 0 ? Math.round((item.transferred / item.total) * 100) : 0}%)</span>
                                     </span>
                                   )}
                                   {item.left > 0 && (
-                                    <span className="bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 px-2 py-0.5 rounded-lg border border-rose-200 dark:border-rose-800">
-                                      تارك: {item.left} ({item.total > 0 ? Math.round((item.left / item.total) * 100) : 0}%)
+                                    <span className="bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 px-2 py-0.5 rounded-lg border border-rose-200 dark:border-rose-800 whitespace-nowrap inline-flex items-center gap-1">
+                                      <span>تارك: {item.left}</span>
+                                      <span dir="ltr">({item.total > 0 ? Math.round((item.left / item.total) * 100) : 0}%)</span>
                                     </span>
                                   )}
                                   {item.graduated > 0 && (
-                                    <span className="bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-lg border border-blue-200 dark:border-blue-800">
-                                      متخرج: {item.graduated} ({item.total > 0 ? Math.round((item.graduated / item.total) * 100) : 0}%)
+                                    <span className="bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-lg border border-blue-200 dark:border-blue-800 whitespace-nowrap inline-flex items-center gap-1">
+                                      <span>متخرج: {item.graduated}</span>
+                                      <span dir="ltr">({item.total > 0 ? Math.round((item.graduated / item.total) * 100) : 0}%)</span>
                                     </span>
                                   )}
                                 </div>
@@ -5125,7 +5653,7 @@ export default function App() {
                             </tr>
                           )) : (
                             <tr>
-                              <td colSpan={3} className="p-4 text-center text-slate-400 font-bold">لا توجد بيانات متاحة</td>
+                              <td colSpan={4} className="p-4 text-center text-slate-400 font-bold">لا توجد بيانات متاحة</td>
                             </tr>
                           )}
                         </tbody>
@@ -5136,8 +5664,9 @@ export default function App() {
 
                 {/* Footer */}
                 <button 
+                  type="button"
                   onClick={() => setView('list')} 
-                  className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold rounded-xl text-slate-700 dark:text-slate-200 text-xs transition-colors cursor-pointer"
+                  className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold rounded-xl text-slate-700 dark:text-slate-200 text-xs transition-colors cursor-pointer shrink-0"
                 >
                   إغلاق الإحصائيات
                 </button>
@@ -5807,7 +6336,7 @@ export default function App() {
         {alertConfig && <AlertModal message={alertConfig.message} type={alertConfig.type} onClose={() => setAlertConfig(null)} />}
         
         {importing && (
-          <Modal onClose={() => {}} zIndex="z-[80]">
+          <Modal onClose={() => {}} zIndex="z-[80]" dismissible={false}>
             <div className="bg-white rounded-2xl p-8 flex flex-col items-center gap-4 shadow-2xl">
               <div className="relative flex items-center justify-center">
                   <div className="animate-spin text-blue-600"><Loader2 size={64} /></div>
