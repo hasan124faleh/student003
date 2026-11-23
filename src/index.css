@@ -7,6 +7,7 @@
 
 html, body {
   font-family: var(--app-font-family);
+  line-height: 1.65;
   background-color: #f8fafc;
   color: #1e293b;
   overflow-x: hidden;
@@ -298,14 +299,16 @@ html.dark .alphabet-nav-btn {
 }
 .share-student-details {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 10px 14px;
   font-size: 14px;
+  line-height: 1.65;
 }
 .share-detail-item {
   display: flex;
-  align-items: center;
-  gap: 4px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
 }
 .share-detail-label {
   color: #64748b;

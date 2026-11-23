@@ -1820,10 +1820,10 @@ const ModernAppLayout = ({
 
           {/* Primary Action Toolbar (Hidden in Search Mode to show more names) */}
           {!inSearchMode && (
-            <div className="flex flex-wrap sm:flex-nowrap items-center justify-between sm:justify-start gap-1 sm:gap-2 shrink-0">
+            <div className="flex flex-wrap sm:flex-nowrap items-center justify-between sm:justify-start gap-1.5 sm:gap-2 shrink-0">
               <button 
                 onClick={() => { setSelectedId(null); setView('add'); setSimilarStudents([]); }} 
-                className={`h-8 sm:h-9 px-2.5 sm:px-3.5 ${currentTheme.primary} ${currentTheme.hover} text-white rounded-xl text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0`}
+                className={`min-h-8 sm:min-h-9 py-1.5 px-2.5 sm:px-3.5 ${currentTheme.primary} ${currentTheme.hover} text-white rounded-xl text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0`}
                 title="إضافة طالب جديد (Ctrl+N)"
               >
                 <Plus size={14} className="shrink-0" />
@@ -1832,7 +1832,7 @@ const ModernAppLayout = ({
 
               <button 
                 onClick={() => setShowPrintModal(true)} 
-                className="h-8 sm:h-9 px-2.5 sm:px-3.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                className="min-h-8 sm:min-h-9 py-1.5 px-2.5 sm:px-3.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs transition-colors cursor-pointer whitespace-nowrap shrink-0"
                 title="طباعة السجل (Ctrl+P)"
               >
                 <Printer size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
@@ -1843,7 +1843,7 @@ const ModernAppLayout = ({
               <button 
                 type="button"
                 onClick={() => setShowSearchFilters(prev => !prev)} 
-                className={`h-8 sm:h-9 px-2.5 sm:px-3 rounded-xl text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 border transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                className={`min-h-8 sm:min-h-9 py-1.5 px-2.5 sm:px-3 rounded-xl text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 border transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                   showSearchFilters || selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL'
                     ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 shadow-xs'
                     : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
@@ -1859,10 +1859,10 @@ const ModernAppLayout = ({
               </button>
 
               {/* View Mode Switcher: Table vs Cards */}
-              <div className="h-8 sm:h-9 flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 sm:p-1 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
+              <div className="min-h-8 sm:min-h-9 flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 sm:p-1 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
                 <button 
                   onClick={() => setModernViewType('table')} 
-                  className={`h-full px-1.5 sm:p-1.5 rounded-lg text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
+                  className={`p-1.5 rounded-lg text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
                     modernViewType === 'table' 
                       ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs' 
                       : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
@@ -1873,7 +1873,7 @@ const ModernAppLayout = ({
                 </button>
                 <button 
                   onClick={() => setModernViewType('grid')} 
-                  className={`h-full px-1.5 sm:p-1.5 rounded-lg text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
+                  className={`p-1.5 rounded-lg text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
                     modernViewType === 'grid' 
                       ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs' 
                       : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
@@ -1886,7 +1886,7 @@ const ModernAppLayout = ({
 
               <button 
                 onClick={() => setShowPrintTemplateModal(true)} 
-                className="h-8 w-8 sm:h-9 sm:w-9 flex items-center justify-center bg-white dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs transition-colors cursor-pointer shrink-0"
+                className="min-h-8 min-w-8 sm:min-h-9 sm:min-w-9 p-1.5 flex items-center justify-center bg-white dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs transition-colors cursor-pointer shrink-0"
                 title="تخصيص أعمدة الطباعة"
               >
                 <SlidersHorizontal size={15} />
@@ -2169,50 +2169,50 @@ const ModernAppLayout = ({
                     {/* Expanded Details Drawer (Hidden by default; reveals Grade + Full Details when pressing arrow) */}
                     {isExpanded && (
                       <div
-                        className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 space-y-2 text-[11px] animate-fade-in"
+                        className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 space-y-2.5 text-xs leading-relaxed animate-fade-in"
                         onClick={e => e.stopPropagation()}
                       >
-                        <div className="grid grid-cols-2 gap-1.5 bg-slate-50/90 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-slate-50/90 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 leading-relaxed">
                           {s.transferGrade && (
-                            <div className="col-span-2 text-amber-800 dark:text-amber-300 font-bold">
+                            <div className="col-span-full text-amber-800 dark:text-amber-300 font-bold leading-relaxed">
                               الصف: <span className="font-black">{s.transferGrade}</span>
                             </div>
                           )}
                           {s.status === 'graduated' && s.graduationGrade && (
-                            <div className="col-span-2 text-blue-800 dark:text-blue-300 font-bold">
+                            <div className="col-span-full text-blue-800 dark:text-blue-300 font-bold leading-relaxed">
                               الصف / الفرع: <span className="font-black">{s.graduationGrade}</span>
                             </div>
                           )}
                           {s.docDestination && (
-                            <div className="col-span-2 text-slate-700 dark:text-slate-200 font-semibold">
+                            <div className="col-span-full text-slate-700 dark:text-slate-200 font-semibold leading-relaxed break-words">
                               الجهة: <span className="font-bold">{s.docDestination}</span>
                             </div>
                           )}
                           {s.docDate && (
-                            <div className="text-slate-600 dark:text-slate-300 font-semibold">
+                            <div className="text-slate-600 dark:text-slate-300 font-semibold leading-relaxed">
                               تاريخ الوثيقة: <span className="font-mono font-bold">{s.docDate}</span>
                             </div>
                           )}
                           {s.docPurpose && (
-                            <div className="text-slate-600 dark:text-slate-300 font-semibold">
+                            <div className="text-slate-600 dark:text-slate-300 font-semibold leading-relaxed">
                               الغرض: <span className="font-bold">{s.docPurpose}</span>
                             </div>
                           )}
                           {s.graduationYear && (
-                            <div className="text-slate-600 dark:text-slate-300 font-semibold">
+                            <div className="text-slate-600 dark:text-slate-300 font-semibold leading-relaxed">
                               العام الدراسي: <span className="font-mono font-bold">{s.graduationYear}</span>
                             </div>
                           )}
                           {s.graduationRound && (
-                            <div className="text-slate-600 dark:text-slate-300 font-semibold">
+                            <div className="text-slate-600 dark:text-slate-300 font-semibold leading-relaxed">
                               الدور: <span className="font-bold">{s.graduationRound}</span>
                             </div>
                           )}
-                          <div className="text-slate-500 dark:text-slate-400 font-semibold">
+                          <div className="text-slate-500 dark:text-slate-400 font-semibold leading-relaxed">
                             تاريخ التسجيل: <span className="font-mono">{new Date(s.createdAt).toLocaleDateString('ar-EG')}</span>
                           </div>
                           {s.notes && (
-                            <div className="col-span-2 text-slate-600 dark:text-slate-300 font-semibold">
+                            <div className="col-span-full text-slate-600 dark:text-slate-300 font-semibold leading-relaxed break-words">
                               ملاحظات: <span>{s.notes}</span>
                             </div>
                           )}
@@ -2588,30 +2588,30 @@ const ModernAppLayout = ({
                   {/* Hidden Grade & Extra Details - revealed when pressing the expand arrow */}
                   {expandedStudentIds.includes(s.id) && (
                     <div className="space-y-2 mb-3 animate-fade-in" onClick={e => e.stopPropagation()}>
-                      <div className="bg-slate-50/90 dark:bg-slate-800/60 p-2.5 rounded-xl text-[11px] space-y-1 border border-slate-100 dark:border-slate-700">
+                      <div className="bg-slate-50/90 dark:bg-slate-800/60 p-3 rounded-xl text-xs leading-relaxed space-y-2 border border-slate-100 dark:border-slate-700">
                         {s.transferGrade && (
-                          <div className="text-amber-800 dark:text-amber-300 font-bold">الصف: {s.transferGrade}</div>
+                          <div className="text-amber-800 dark:text-amber-300 font-bold leading-relaxed">الصف: {s.transferGrade}</div>
                         )}
                         {s.status === 'graduated' && s.graduationGrade && (
-                          <div className="text-blue-800 dark:text-blue-300 font-bold">🎓 الصف / الفرع: {s.graduationGrade}</div>
+                          <div className="text-blue-800 dark:text-blue-300 font-bold leading-relaxed">🎓 الصف / الفرع: {s.graduationGrade}</div>
                         )}
                         {s.docDestination && (
-                          <div className="text-slate-700 dark:text-slate-200 font-semibold">الجهة: {s.docDestination}</div>
+                          <div className="text-slate-700 dark:text-slate-200 font-semibold leading-relaxed break-words">الجهة: {s.docDestination}</div>
                         )}
                         {s.docDate && (
-                          <div className="text-slate-600 dark:text-slate-300 font-semibold">تاريخ الوثيقة: {s.docDate}</div>
+                          <div className="text-slate-600 dark:text-slate-300 font-semibold leading-relaxed">تاريخ الوثيقة: <span className="font-mono font-bold">{s.docDate}</span></div>
                         )}
                         {s.graduationYear && (
-                          <div className="text-slate-600 dark:text-slate-300 font-semibold">العام الدراسي: {s.graduationYear}</div>
+                          <div className="text-slate-600 dark:text-slate-300 font-semibold leading-relaxed">العام الدراسي: <span className="font-mono font-bold">{s.graduationYear}</span></div>
                         )}
                         {s.graduationRound && (
-                          <div className="text-slate-600 dark:text-slate-300 font-semibold">الدور: {s.graduationRound}</div>
+                          <div className="text-slate-600 dark:text-slate-300 font-semibold leading-relaxed">الدور: {s.graduationRound}</div>
                         )}
-                        <div className="text-slate-500 dark:text-slate-400 font-semibold">
-                          تاريخ التسجيل: {new Date(s.createdAt).toLocaleDateString('ar-EG')}
+                        <div className="text-slate-500 dark:text-slate-400 font-semibold leading-relaxed">
+                          تاريخ التسجيل: <span className="font-mono">{new Date(s.createdAt).toLocaleDateString('ar-EG')}</span>
                         </div>
                         {s.notes && (
-                          <div className="text-slate-600 dark:text-slate-300 font-semibold">ملاحظات: {s.notes}</div>
+                          <div className="text-slate-600 dark:text-slate-300 font-semibold leading-relaxed break-words">ملاحظات: {s.notes}</div>
                         )}
                       </div>
                     </div>
@@ -3725,7 +3725,7 @@ export default function App() {
                             value={trashSearch}
                             onChange={(e) => setTrashSearch(e.target.value)}
                             placeholder="ابحث داخل سلة المحذوفات..."
-                            className="flex-1 bg-transparent outline-none text-slate-800 dark:text-slate-100 font-bold text-xs sm:text-sm placeholder:text-slate-400 min-w-0 h-7"
+                            className="flex-1 bg-transparent outline-none text-slate-800 dark:text-slate-100 font-bold text-xs sm:text-sm placeholder:text-slate-400 min-w-0 min-h-7 py-0.5"
                           />
                           {trashSearch.length > 0 && (
                             <button
@@ -4758,17 +4758,17 @@ export default function App() {
                    {/* SWAPPED: رقم الصفحة first (right column in RTL), then رقم القيد */}
                    <div className="grid grid-cols-2 gap-3">
                      <div>
-                       <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">رقم الصفحة</label>
+                       <label className="block text-[11px] font-bold text-slate-500 mb-1.5 leading-relaxed">رقم الصفحة</label>
                        <input 
                          name="pageNumber" 
                          required 
-                         className="w-full p-2.5 rounded-xl bg-slate-50 border outline-none text-center font-bold text-sm" 
+                         className="w-full p-2.5 rounded-xl bg-slate-50 border outline-none text-center font-bold text-sm leading-normal" 
                          placeholder="رقم الصفحة" 
                          defaultValue={editFormData?.pageNumber || ''} 
                        />
                      </div>
                      <div>
-                       <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">رقم القيد</label>
+                       <label className="block text-[11px] font-bold text-slate-500 mb-1.5 leading-relaxed">رقم القيد</label>
                        <div className="relative">
                          <input 
                            type="text" 
@@ -4776,7 +4776,7 @@ export default function App() {
                            required 
                            defaultValue={editFormData?.regNumber || ''} 
                            list="regNumbersList"
-                           className={`w-full p-2.5 rounded-xl bg-slate-50 outline-none border ${currentTheme.ring} font-bold text-sm text-center`}
+                           className={`w-full p-2.5 rounded-xl bg-slate-50 outline-none border ${currentTheme.ring} font-bold text-sm text-center leading-normal`}
                            placeholder="أدخل رقم القيد"
                          />
                          <datalist id="regNumbersList">
@@ -4791,9 +4791,12 @@ export default function App() {
                      </div>
                    </div>
 
-                   <input type="date" name="createdAt" className="w-full p-2.5 rounded-xl bg-slate-50 border outline-none font-bold text-sm" defaultValue={editFormData?.createdAt || formatDateForInput(Date.now())} />
                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">الوضع الأكاديمي</label>
+                     <label className="block text-[11px] font-bold text-slate-500 mb-1.5 leading-relaxed">تاريخ القيد</label>
+                     <input type="date" name="createdAt" className="w-full p-2.5 rounded-xl bg-slate-50 border outline-none font-bold text-sm leading-normal" defaultValue={editFormData?.createdAt || formatDateForInput(Date.now())} />
+                   </div>
+                   <div>
+                      <label className="block text-[11px] font-bold text-slate-500 mb-2 leading-relaxed">الوضع الأكاديمي</label>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                         <label className="cursor-pointer group">
                             <input 
@@ -4850,24 +4853,24 @@ export default function App() {
                          <span>بيانات النقل والوثيقة الرسمية</span>
                        </div>
 
-                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                          <div>
-                           <label className="block text-[11px] font-bold text-amber-900 mb-1">تاريخ الوثيقة</label>
+                           <label className="block text-[11px] font-bold text-amber-900 mb-1.5 leading-relaxed">تاريخ الوثيقة</label>
                            <input 
                              type="date"
                              name="docDate" 
                              defaultValue={editFormData?.docDate || ''} 
-                             className="w-full p-2.5 rounded-xl bg-white border border-amber-200 outline-none font-bold text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500" 
+                             className="w-full p-2.5 rounded-xl bg-white border border-amber-200 outline-none font-bold text-xs text-slate-800 leading-normal focus:border-amber-500 focus:ring-1 focus:ring-amber-500" 
                            />
                          </div>
 
                           <div>
-                            <label className="block text-[11px] font-bold text-amber-900 mb-1">الصف الذي انتقل فيه</label>
+                            <label className="block text-[11px] font-bold text-amber-900 mb-1.5 leading-relaxed">الصف الذي انتقل فيه</label>
                             <select 
                               name="transferGrade" 
                               value={formTransferGrade} 
                               onChange={(e) => setFormTransferGrade(e.target.value)} 
-                              className="w-full p-2.5 rounded-xl bg-white border border-amber-200 outline-none font-bold text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                              className="w-full p-2.5 rounded-xl bg-white border border-amber-200 outline-none font-bold text-xs text-slate-800 leading-normal focus:border-amber-500 focus:ring-1 focus:ring-amber-500 cursor-pointer"
                             >
                               <option value="">اختر الصف...</option>
                               <optgroup label="المرحلة المتوسطة">
@@ -4896,18 +4899,18 @@ export default function App() {
                           </div>
 
                          <div className="sm:col-span-2">
-                           <label className="block text-[11px] font-bold text-amber-900 mb-1">الجهة الصادرة إليها</label>
+                           <label className="block text-[11px] font-bold text-amber-900 mb-1.5 leading-relaxed">الجهة الصادرة إليها</label>
                            <input 
                              type="text" 
                              name="docDestination" 
                              defaultValue={editFormData?.docDestination || ''} 
                              placeholder="المدرسة أو المديرية المنقول إليها" 
-                             className="w-full p-2.5 rounded-xl bg-white border border-amber-200 outline-none font-bold text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500" 
+                             className="w-full p-2.5 rounded-xl bg-white border border-amber-200 outline-none font-bold text-xs text-slate-800 leading-normal focus:border-amber-500 focus:ring-1 focus:ring-amber-500" 
                            />
                          </div>
 
                          <div className="sm:col-span-2 space-y-2">
-                           <label className="block text-[11px] font-bold text-amber-900 mb-1">الغرض من الوثيقة</label>
+                           <label className="block text-[11px] font-bold text-amber-900 mb-1.5 leading-relaxed">الغرض من الوثيقة</label>
                            <div className="grid grid-cols-2 gap-2">
                              <label className="cursor-pointer">
                                <input 
@@ -5422,30 +5425,23 @@ export default function App() {
         {/* Quick Status Shortcut Modal */}
         {quickStatusStudent && (
           <Modal onClose={() => setQuickStatusStudent(null)} zIndex="z-[60]" maxWidth="max-w-md">
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto w-full text-right border border-slate-100 dark:border-slate-800">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-2xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black shadow-xs">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl pt-7 px-5 pb-5 sm:p-6 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto w-full text-right border border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 pl-9">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black shadow-xs shrink-0">
                     <SlidersHorizontal size={20} />
                   </div>
-                  <div>
-                    <h3 className="font-black text-slate-800 dark:text-slate-100 text-sm">تعديل سريع لحالة الطالب</h3>
-                    <p className="text-xs text-blue-600 dark:text-blue-400 font-bold">{cleanName(quickStatusStudent.firstName)} {quickStatusStudent.lastName || ''}</p>
+                  <div className="min-w-0">
+                    <h3 className="font-black text-slate-800 dark:text-slate-100 text-sm leading-relaxed">تعديل سريع لحالة الطالب</h3>
+                    <p className="text-xs text-blue-600 dark:text-blue-400 font-bold leading-relaxed truncate">{cleanName(quickStatusStudent.firstName)} {restoreYehDots(quickStatusStudent.lastName) || ''}</p>
                   </div>
                 </div>
-                <button 
-                  type="button"
-                  onClick={() => setQuickStatusStudent(null)}
-                  className="p-1.5 rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                >
-                  <X size={18} />
-                </button>
               </div>
 
               {/* Status Selector Options */}
               <div>
-                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">اختر الحالة الدراسية:</label>
-                <div className="grid grid-cols-2 gap-2">
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2 leading-relaxed">اختر الحالة الدراسية:</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {[
                     { id: 'active', label: 'مستمر بالدراسة', color: 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300', dot: 'bg-emerald-500' },
                     { id: 'transferred', label: 'منقول / صادر وثيقة', color: 'border-amber-500 bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300', dot: 'bg-amber-500' },
@@ -5456,13 +5452,13 @@ export default function App() {
                       key={opt.id}
                       type="button"
                       onClick={() => setQuickStatusValue(opt.id as any)}
-                      className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                      className={`p-2.5 rounded-xl border text-xs font-bold leading-relaxed flex items-center gap-2 transition-all cursor-pointer ${
                         quickStatusValue === opt.id 
                           ? `${opt.color} ring-2 ring-blue-500/30 font-black shadow-xs` 
                           : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
                       }`}
                     >
-                      <span className={`w-2 h-2 rounded-full ${opt.dot}`}></span>
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${opt.dot}`}></span>
                       <span>{opt.label}</span>
                     </button>
                   ))}
@@ -5471,38 +5467,38 @@ export default function App() {
 
               {/* Transferred Fields */}
               {quickStatusValue === 'transferred' && (
-                <div className="p-3 bg-amber-50/70 dark:bg-amber-950/30 rounded-2xl border border-amber-200/80 dark:border-amber-900/60 space-y-2.5 animate-fade-in">
-                  <div className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                <div className="p-3.5 bg-amber-50/70 dark:bg-amber-950/30 rounded-2xl border border-amber-200/80 dark:border-amber-900/60 space-y-3 animate-fade-in">
+                  <div className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5 leading-relaxed">
                     <FileText size={14} /> بيانات النقل والوثيقة
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">الجهة الصادرة إليها:</label>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1.5 leading-relaxed">الجهة الصادرة إليها:</label>
                     <input 
                       type="text"
                       value={quickDocDestination}
                       onChange={e => setQuickDocDestination(e.target.value)}
                       placeholder="مثال: متوسطة البصرة للبنين"
-                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500"
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold leading-normal outline-none focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">الصف المنقول فيه:</label>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1.5 leading-relaxed">الصف المنقول فيه:</label>
                       <input 
                         type="text"
                         value={quickTransferGrade}
                         onChange={e => setQuickTransferGrade(e.target.value)}
                         placeholder="مثال: الرابع علمي"
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold leading-normal outline-none focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">تاريخ الوثيقة:</label>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1.5 leading-relaxed">تاريخ الوثيقة:</label>
                       <input 
                         type="date"
                         value={quickDocDate}
                         onChange={e => setQuickDocDate(e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold leading-normal outline-none focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
                   </div>
@@ -5511,29 +5507,29 @@ export default function App() {
 
               {/* Graduated Fields */}
               {quickStatusValue === 'graduated' && (
-                <div className="p-3 bg-blue-50/70 dark:bg-blue-950/30 rounded-2xl border border-blue-200/80 dark:border-blue-900/60 space-y-2.5 animate-fade-in">
-                  <div className="text-xs font-bold text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
+                <div className="p-3.5 bg-blue-50/70 dark:bg-blue-950/30 rounded-2xl border border-blue-200/80 dark:border-blue-900/60 space-y-3 animate-fade-in">
+                  <div className="text-xs font-bold text-blue-800 dark:text-blue-300 flex items-center gap-1.5 leading-relaxed">
                     <GraduationCap size={15} /> بيانات التخرج
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">العام الدراسي للتخرج:</label>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1.5 leading-relaxed">العام الدراسي للتخرج:</label>
                     <select
                       value={quickGradYear}
                       onChange={e => setQuickGradYear(e.target.value)}
-                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold leading-normal outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       {allGraduationYears.map(y => (
                         <option key={y} value={y}>{y}</option>
                       ))}
                     </select>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">الدور:</label>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1.5 leading-relaxed">الدور:</label>
                       <select
                         value={quickGradRound}
                         onChange={e => setQuickGradRound(e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold leading-normal outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="الدور الأول">الدور الأول</option>
                         <option value="الدور الثاني">الدور الثاني</option>
@@ -5542,11 +5538,11 @@ export default function App() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">الصف:</label>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1.5 leading-relaxed">الصف:</label>
                       <select
                         value={quickGradGrade}
                         onChange={e => setQuickGradGrade(e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold leading-normal outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="السادس العلمي">السادس العلمي</option>
                         <option value="السادس الأدبي">السادس الأدبي</option>
@@ -6059,9 +6055,9 @@ export default function App() {
         {/* Share Modal (SWAPPED: الصفحة before رقم القيد) */}
         {showShareModal && (
           <Modal onClose={() => setShowShareModal(false)} zIndex="z-[70]">
-            <div className="bg-white rounded-2xl p-5 space-y-4 max-h-[80vh] overflow-y-auto">
-              <h3 className="text-lg font-bold flex items-center gap-2">
-                <MessageSquare size={20} className="text-green-600" />
+            <div className="bg-white rounded-2xl pt-7 px-5 pb-5 sm:p-6 space-y-4 max-h-[82vh] overflow-y-auto">
+              <h3 className="text-lg font-bold flex items-center gap-2 pl-9 leading-relaxed">
+                <MessageSquare size={20} className="text-green-600 shrink-0" />
                 مشاركة عبر واتساب
               </h3>
               
@@ -6075,8 +6071,8 @@ export default function App() {
                   
                   return (
                     <div key={s.id} className="share-student-item">
-                      <div className="share-student-name">
-                        {index + 1}. {cleanName(s.firstName)} {s.lastName || ''}
+                      <div className="share-student-name leading-relaxed">
+                        {index + 1}. {cleanName(s.firstName)} {restoreYehDots(s.lastName) || ''}
                       </div>
                       <div className="share-student-details">
                         {/* SWAPPED: الصفحة first, then القيد */}
@@ -6099,30 +6095,30 @@ export default function App() {
                           <span className="share-detail-value">{new Date(s.createdAt).toLocaleDateString('ar-EG')}</span>
                         </div>
                         {s.status === 'transferred' && (
-                          <div className="share-detail-item col-span-2 bg-amber-50/80 p-2.5 rounded-xl border border-amber-200 mt-1">
-                            <div className="text-[11px] font-bold text-amber-900 mb-1">📋 بيانات النقل والوثيقة:</div>
-                            <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-800">
-                              {s.docDate && <div>📅 تاريخ الوثيقة: <span className="font-bold">{s.docDate}</span></div>}
-                              {s.transferGrade && <div>🎒 الصف الذي انتقل فيه: <span className="font-bold">{s.transferGrade}</span></div>}
-                              {s.docDestination && <div>🏛️ الجهة الصادرة إليها: <span className="font-bold">{s.docDestination}</span></div>}
-                              {s.docPurpose && <div>🎯 الغرض من الوثيقة: <span className="font-bold">{s.docPurpose}</span></div>}
+                          <div className="col-span-full bg-amber-50/80 p-3 rounded-xl border border-amber-200 mt-1 space-y-2 leading-relaxed">
+                            <div className="text-xs font-bold text-amber-900 leading-relaxed">📋 بيانات النقل والوثيقة:</div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-slate-800 leading-relaxed">
+                              {s.docDate && <div className="leading-relaxed">📅 تاريخ الوثيقة: <span className="font-bold font-mono">{s.docDate}</span></div>}
+                              {s.transferGrade && <div className="leading-relaxed">🎒 الصف الذي انتقل فيه: <span className="font-bold">{s.transferGrade}</span></div>}
+                              {s.docDestination && <div className="leading-relaxed break-words">🏛️ الجهة الصادرة إليها: <span className="font-bold">{s.docDestination}</span></div>}
+                              {s.docPurpose && <div className="leading-relaxed">🎯 الغرض من الوثيقة: <span className="font-bold">{s.docPurpose}</span></div>}
                             </div>
                           </div>
                         )}
                         {s.status === 'graduated' && (s.graduationYear || s.graduationGrade || s.graduationRound) && (
-                          <div className="share-detail-item col-span-2 bg-blue-50/80 p-2.5 rounded-xl border border-blue-200 mt-1">
-                            <div className="text-[11px] font-bold text-blue-900 mb-1">🎓 بيانات التخرج:</div>
-                            <div className="grid grid-cols-3 gap-1 text-[11px] text-slate-800">
-                              {s.graduationYear && <div>📅 العام: <span className="font-bold">{s.graduationYear}</span></div>}
-                              {s.graduationRound && <div>📋 الدور: <span className="font-bold">{s.graduationRound}</span></div>}
-                              {s.graduationGrade && <div>🎒 الصف: <span className="font-bold">{s.graduationGrade}</span></div>}
+                          <div className="col-span-full bg-blue-50/80 p-3 rounded-xl border border-blue-200 mt-1 space-y-2 leading-relaxed">
+                            <div className="text-xs font-bold text-blue-900 leading-relaxed">🎓 بيانات التخرج:</div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs text-slate-800 leading-relaxed">
+                              {s.graduationYear && <div className="leading-relaxed">📅 العام: <span className="font-bold font-mono">{s.graduationYear}</span></div>}
+                              {s.graduationRound && <div className="leading-relaxed">📋 الدور: <span className="font-bold">{s.graduationRound}</span></div>}
+                              {s.graduationGrade && <div className="leading-relaxed">🎒 الصف: <span className="font-bold">{s.graduationGrade}</span></div>}
                             </div>
                           </div>
                         )}
                         {s.notes && (
-                          <div className="share-detail-item col-span-2">
+                          <div className="share-detail-item col-span-full">
                             <span className="share-detail-label">📝 ملاحظات:</span>
-                            <span className="share-detail-value">{s.notes}</span>
+                            <span className="share-detail-value break-words">{s.notes}</span>
                           </div>
                         )}
                       </div>
@@ -6396,10 +6392,10 @@ export default function App() {
 
             return (
               <Modal onClose={() => { setView('list'); setSimilarStudents([]); }}>
-                 <div className="bg-white rounded-3xl shadow-2xl p-5 md:p-6 space-y-6 animate-slide-up relative overflow-hidden">
+                 <div className="bg-white rounded-3xl shadow-2xl pt-8 px-5 pb-5 md:p-6 space-y-5 animate-slide-up relative overflow-hidden">
                      <div className="absolute top-0 right-0 w-24 h-24 bg-slate-50 rounded-full -mr-8 -mt-8"></div>
     
-                    <div className="relative">
+                    <div className="relative pl-9">
                         <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 leading-relaxed">
                           <span>{cleanName(s.firstName)}</span>
                           {s.lastName && (
@@ -6413,31 +6409,31 @@ export default function App() {
                     {/* SWAPPED: رقم الصفحة first (right column in RTL), then رقم القيد */}
                     <div className="grid grid-cols-2 gap-3">
                        <div className="bg-[#FFA500] text-white p-4 rounded-xl shadow-lg flex flex-col items-center justify-center transform transition-transform hover:scale-[1.02]">
-                           <span className="text-amber-100 text-[10px] font-bold uppercase tracking-wider mb-1">رقم الصفحة</span>
-                           <span className="text-3xl font-mono font-black">{s.pageNumber}</span>
+                           <span className="text-amber-100 text-[11px] font-bold leading-relaxed mb-1">رقم الصفحة</span>
+                           <span className="text-3xl font-mono font-black leading-none">{s.pageNumber}</span>
                        </div>
                        <div className={`${currentTheme.primary} text-white p-4 rounded-xl shadow-lg flex flex-col items-center justify-center transform transition-transform hover:scale-[1.02]`}>
-                           <span className="text-slate-200 text-[10px] font-bold uppercase tracking-wider mb-1">رقم القيد</span>
-                           <span className="text-3xl font-mono font-black">{s.regNumber}</span>
+                           <span className="text-slate-200 text-[11px] font-bold leading-relaxed mb-1">رقم القيد</span>
+                           <span className="text-3xl font-mono font-black leading-none">{s.regNumber}</span>
                        </div>
                     </div>
 
-                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-3">
-                        <div className="flex justify-between items-center border-b border-slate-200 pb-3">
-                            <div className="flex items-center gap-2">
-                                <div className="p-1.5 bg-white rounded-lg shadow-sm"><Calendar size={16} className="text-slate-500"/></div>
-                                <div>
-                                    <div className="text-[10px] font-bold text-slate-400">تاريخ القيد</div>
-                                    <div className="font-bold text-slate-800 text-sm">{new Date(s.createdAt).toLocaleDateString('ar-EG')}</div>
+                    <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3.5">
+                        <div className="flex justify-between items-center border-b border-slate-200 pb-3.5">
+                            <div className="flex items-center gap-2.5">
+                                <div className="p-2 bg-white rounded-lg shadow-sm shrink-0"><Calendar size={16} className="text-slate-500"/></div>
+                                <div className="space-y-0.5">
+                                    <div className="text-[11px] font-bold text-slate-400 leading-relaxed">تاريخ القيد</div>
+                                    <div className="font-bold text-slate-800 text-sm leading-relaxed">{new Date(s.createdAt).toLocaleDateString('ar-EG')}</div>
                                 </div>
                             </div>
                         </div>
                         <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                                <div className="p-1.5 bg-white rounded-lg shadow-sm"><Info size={16} className="text-slate-500"/></div>
-                                <div>
-                                    <div className="text-[10px] font-bold text-slate-400">الوضع الأكاديمي</div>
-                                    <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-bold mt-0.5 ${statusColors[s.status || 'active'] || statusColors['active']}`}>
+                            <div className="flex items-center gap-2.5">
+                                <div className="p-2 bg-white rounded-lg shadow-sm shrink-0"><Info size={16} className="text-slate-500"/></div>
+                                <div className="space-y-1">
+                                    <div className="text-[11px] font-bold text-slate-400 leading-relaxed">الوضع الأكاديمي</div>
+                                    <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold leading-relaxed ${statusColors[s.status || 'active'] || statusColors['active']}`}>
                                         {statusLabels[s.status || 'active'] || 'مستمر'}
                                     </div>
                                 </div>
@@ -6446,28 +6442,28 @@ export default function App() {
 
                         {/* بيانات النقل والوثيقة */}
                         {(s.status === 'transferred' || s.docDestination || s.docDate) && (
-                          <div className="pt-3 border-t border-slate-200">
-                            <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3.5 space-y-2.5">
-                              <div className="text-xs font-bold text-amber-900 flex items-center gap-1.5 border-b border-amber-200 pb-1.5">
-                                <FileText size={15} className="text-amber-600" />
+                          <div className="pt-3.5 border-t border-slate-200">
+                            <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-3.5 space-y-3">
+                              <div className="text-xs font-bold text-amber-900 flex items-center gap-1.5 border-b border-amber-200 pb-2 leading-relaxed">
+                                <FileText size={15} className="text-amber-600 shrink-0" />
                                 <span>بيانات النقل والوثيقة الرسمية</span>
                               </div>
-                              <div className="grid grid-cols-2 gap-2 text-xs">
-                                <div>
-                                  <span className="text-[10px] font-bold text-amber-800 block">تاريخ الوثيقة:</span>
-                                  <span className="font-bold text-slate-800 font-mono">{s.docDate || '—'}</span>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs leading-relaxed">
+                                <div className="bg-white/80 dark:bg-slate-900/60 rounded-xl p-2.5 border border-amber-200/70 space-y-1">
+                                  <span className="text-[11px] font-bold text-amber-800 block leading-relaxed">تاريخ الوثيقة:</span>
+                                  <span className="font-bold text-slate-800 font-mono block leading-relaxed">{s.docDate || '—'}</span>
                                 </div>
-                                <div>
-                                  <span className="text-[10px] font-bold text-amber-800 block">الصف الذي انتقل فيه:</span>
-                                  <span className="font-bold text-slate-800">{s.transferGrade || '—'}</span>
+                                <div className="bg-white/80 dark:bg-slate-900/60 rounded-xl p-2.5 border border-amber-200/70 space-y-1">
+                                  <span className="text-[11px] font-bold text-amber-800 block leading-relaxed">الصف الذي انتقل فيه:</span>
+                                  <span className="font-bold text-slate-800 block leading-relaxed">{s.transferGrade || '—'}</span>
                                 </div>
-                                <div>
-                                  <span className="text-[10px] font-bold text-amber-800 block">الجهة الصادرة إليها:</span>
-                                  <span className="font-bold text-slate-800">{s.docDestination || '—'}</span>
+                                <div className="bg-white/80 dark:bg-slate-900/60 rounded-xl p-2.5 border border-amber-200/70 space-y-1">
+                                  <span className="text-[11px] font-bold text-amber-800 block leading-relaxed">الجهة الصادرة إليها:</span>
+                                  <span className="font-bold text-slate-800 block leading-relaxed break-words">{s.docDestination || '—'}</span>
                                 </div>
-                                <div>
-                                  <span className="text-[10px] font-bold text-amber-800 block">الغرض من الوثيقة:</span>
-                                  <span className="font-bold text-slate-800">{s.docPurpose || '—'}</span>
+                                <div className="bg-white/80 dark:bg-slate-900/60 rounded-xl p-2.5 border border-amber-200/70 space-y-1">
+                                  <span className="text-[11px] font-bold text-amber-800 block leading-relaxed">الغرض من الوثيقة:</span>
+                                  <span className="font-bold text-slate-800 block leading-relaxed break-words">{s.docPurpose || '—'}</span>
                                 </div>
                               </div>
                             </div>
@@ -6476,24 +6472,24 @@ export default function App() {
 
                         {/* بيانات التخرج */}
                         {(s.status === 'graduated' || s.graduationYear || s.graduationGrade || s.graduationRound) && (
-                          <div className="pt-3 border-t border-slate-200">
-                            <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-3.5 space-y-2.5">
-                              <div className="text-xs font-bold text-blue-900 flex items-center gap-1.5 border-b border-blue-200 pb-1.5">
-                                <GraduationCap size={15} className="text-blue-600" />
+                          <div className="pt-3.5 border-t border-slate-200">
+                            <div className="bg-blue-50/80 border border-blue-200 rounded-2xl p-3.5 space-y-3">
+                              <div className="text-xs font-bold text-blue-900 flex items-center gap-1.5 border-b border-blue-200 pb-2 leading-relaxed">
+                                <GraduationCap size={15} className="text-blue-600 shrink-0" />
                                 <span>بيانات التخرج الرسمية</span>
                               </div>
-                              <div className="grid grid-cols-3 gap-2 text-xs">
-                                <div>
-                                  <span className="text-[10px] font-bold text-blue-800 block">العام الدراسي:</span>
-                                  <span className="font-bold text-slate-800 font-mono">{s.graduationYear || '—'}</span>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs leading-relaxed">
+                                <div className="bg-white/80 dark:bg-slate-900/60 rounded-xl p-2.5 border border-blue-200/70 space-y-1">
+                                  <span className="text-[11px] font-bold text-blue-800 block leading-relaxed">العام الدراسي:</span>
+                                  <span className="font-bold text-slate-800 font-mono block leading-relaxed">{s.graduationYear || '—'}</span>
                                 </div>
-                                <div>
-                                  <span className="text-[10px] font-bold text-blue-800 block">الدور:</span>
-                                  <span className="font-bold text-slate-800">{s.graduationRound || '—'}</span>
+                                <div className="bg-white/80 dark:bg-slate-900/60 rounded-xl p-2.5 border border-blue-200/70 space-y-1">
+                                  <span className="text-[11px] font-bold text-blue-800 block leading-relaxed">الدور:</span>
+                                  <span className="font-bold text-slate-800 block leading-relaxed">{s.graduationRound || '—'}</span>
                                 </div>
-                                <div>
-                                  <span className="text-[10px] font-bold text-blue-800 block">الصف / الفرع:</span>
-                                  <span className="font-bold text-slate-800">{s.graduationGrade || '—'}</span>
+                                <div className="bg-white/80 dark:bg-slate-900/60 rounded-xl p-2.5 border border-blue-200/70 space-y-1">
+                                  <span className="text-[11px] font-bold text-blue-800 block leading-relaxed">الصف / الفرع:</span>
+                                  <span className="font-bold text-slate-800 block leading-relaxed">{s.graduationGrade || '—'}</span>
                                 </div>
                               </div>
                             </div>
@@ -6501,9 +6497,9 @@ export default function App() {
                         )}
 
                         {s.notes && (
-                            <div className="pt-3 border-t border-slate-200">
-                                <div className="text-[10px] font-bold text-slate-400 mb-1">ملاحظات</div>
-                                <p className="text-slate-700 font-medium leading-relaxed text-sm">{s.notes}</p>
+                            <div className="pt-3.5 border-t border-slate-200 space-y-1">
+                                <div className="text-[11px] font-bold text-slate-400 leading-relaxed">ملاحظات</div>
+                                <p className="text-slate-700 font-medium leading-relaxed text-sm break-words">{s.notes}</p>
                             </div>
                         )}
                     </div>
