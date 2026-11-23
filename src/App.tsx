@@ -2260,10 +2260,10 @@ const ModernAppLayout = ({
 
           {/* 4B. Desktop Table View (>= md) */}
           <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-right border-collapse min-w-[700px]">
+            <table className="w-full text-right border-collapse min-w-[780px]">
               <thead className="bg-slate-100/70 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 text-[11px] font-bold border-b border-slate-200 dark:border-slate-700">
                 <tr>
-                  <th className="p-2.5 w-10 text-center">
+                  <th className="p-2.5 w-10 text-center whitespace-nowrap">
                     <input 
                       type="checkbox" 
                       onChange={(e) => {
@@ -2274,13 +2274,13 @@ const ModernAppLayout = ({
                       className="rounded border-slate-300 cursor-pointer"
                     />
                   </th>
-                  <th className="p-2.5 w-12 text-center">#</th>
-                  <th className="p-2.5">اسم الطالب الكامل</th>
+                  <th className="p-2.5 w-12 text-center whitespace-nowrap">#</th>
+                  <th className="p-2.5 min-w-[260px] whitespace-nowrap">اسم الطالب الكامل</th>
                   {/* SWAPPED: الصفحة then القيد */}
-                  <th className="p-2.5 w-24 text-center">الصفحة (ص)</th>
-                  <th className="p-2.5 w-24 text-center">رقم القيد</th>
-                  <th className="p-2.5 w-28 text-center">الحالة الدراسية</th>
-                  <th className="p-2.5 w-36 text-center">إجراءات</th>
+                  <th className="p-2.5 w-28 min-w-[96px] text-center whitespace-nowrap">الصفحة (ص)</th>
+                  <th className="p-2.5 w-28 min-w-[96px] text-center whitespace-nowrap">رقم القيد</th>
+                  <th className="p-2.5 w-32 min-w-[110px] text-center whitespace-nowrap">الحالة الدراسية</th>
+                  <th className="p-2.5 w-36 min-w-[132px] text-center whitespace-nowrap">إجراءات</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
@@ -2376,24 +2376,24 @@ const ModernAppLayout = ({
                             </div>
                           </div>
                         </td>
-                        <td className="p-2.5 text-center">
-                          <span className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 px-2 py-0.5 rounded-lg font-mono font-bold text-xs">
+                        <td className="p-2.5 text-center whitespace-nowrap">
+                          <span className="inline-flex items-center justify-center bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 px-2.5 py-0.5 rounded-full font-mono tabular-nums font-bold text-xs whitespace-nowrap">
                             ص {s.pageNumber}
                           </span>
                         </td>
-                        <td className="p-2.5 text-center">
-                          <span className={`${currentTheme.primary} text-white px-2 py-0.5 rounded-lg font-mono font-bold text-xs`}>
+                        <td className="p-2.5 text-center whitespace-nowrap">
+                          <span className={`inline-flex items-center justify-center ${currentTheme.primary} text-white px-2.5 py-0.5 rounded-full font-mono tabular-nums font-bold text-xs whitespace-nowrap`}>
                             قيد {s.regNumber}
                           </span>
                         </td>
-                        <td className="p-2.5 text-center">
+                        <td className="p-2.5 text-center whitespace-nowrap">
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               onOpenQuickStatus(s);
                             }}
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold cursor-pointer hover:opacity-85 ${
+                            className={`inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold cursor-pointer hover:opacity-85 whitespace-nowrap ${
                               s.status === 'graduated' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' :
                               s.status === 'left' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' :
                               s.status === 'transferred' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' :
@@ -2401,7 +2401,7 @@ const ModernAppLayout = ({
                             }`}
                             title="انقر لتعديل الحالة سريعاً"
                           >
-                            <span className={`w-1.5 h-1.5 rounded-full ${
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                               s.status === 'graduated' ? 'bg-blue-600' :
                               s.status === 'left' ? 'bg-rose-600' :
                               s.status === 'transferred' ? 'bg-amber-600' :
@@ -2412,8 +2412,8 @@ const ModernAppLayout = ({
                             </span>
                           </button>
                         </td>
-                        <td className="p-2.5 text-center" onClick={e => e.stopPropagation()}>
-                          <div className="flex items-center justify-center gap-1">
+                        <td className="p-2.5 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center justify-center gap-1 flex-nowrap">
                             <button 
                               onClick={() => { setSelectedId(s.id); setView('detail'); }} 
                               className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
