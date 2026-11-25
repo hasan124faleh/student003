@@ -199,6 +199,28 @@ const getSingleLineFontSize = (
     return result;
 };
 
+const toEnglishDigitsOnly = (value: string): string =>
+    value
+        .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+        .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06F0))
+        .replace(/[^0-9]/g, '');
+
+const handleNumericOnlyInput = (e: React.FormEvent<HTMLInputElement>) => {
+    const input = e.currentTarget;
+    const cleaned = toEnglishDigitsOnly(input.value);
+    if (input.value !== cleaned) {
+        const pos = input.selectionStart;
+        const diff = input.value.length - cleaned.length;
+        input.value = cleaned;
+        if (pos !== null) {
+            const nextPos = Math.max(0, pos - diff);
+            try {
+                input.setSelectionRange(nextPos, nextPos);
+            } catch {}
+        }
+    }
+};
+
 const normalizeArabicSearch = (text?: string): string => {
     if (!text) return '';
     return text
@@ -5169,11 +5191,11 @@ export default function App() {
                 <form onSubmit={async (e) => {
                     e.preventDefault();
                     const form = new FormData(e.currentTarget);
-                    const regNum = String(form.get('regNumber') || '').trim();
-                    const pageNum = String(form.get('pageNumber') || '').trim();
+                    const regNum = toEnglishDigitsOnly(String(form.get('regNumber') || '').trim());
+                    const pageNum = toEnglishDigitsOnly(String(form.get('pageNumber') || '').trim());
                     
                     if (!regNum || !pageNum) {
-                        setAlertConfig({ message: "يرجى إدخال رقم الصفحة ورقم القيد", type: 'error' });
+                        setAlertConfig({ message: "يرجى إدخال رقم الصفحة ورقم القيد بالأرقام فقط", type: 'error' });
                         return;
                     }
                     
@@ -5273,11 +5295,16 @@ export default function App() {
                      <div>
                        <label className="block text-[11px] font-bold text-slate-500 mb-1.5 leading-relaxed">رقم الصفحة</label>
                        <input 
+                         type="text"
+                         inputMode="numeric"
+                         pattern="[0-9]*"
+                         dir="ltr"
                          name="pageNumber" 
                          required 
+                         onInput={handleNumericOnlyInput}
                          className="w-full p-2.5 rounded-xl bg-slate-50 border outline-none text-center font-bold text-sm leading-normal" 
                          placeholder="رقم الصفحة" 
-                         defaultValue={editFormData?.pageNumber || ''} 
+                         defaultValue={toEnglishDigitsOnly(editFormData?.pageNumber || '')} 
                        />
                      </div>
                      <div>
@@ -5285,9 +5312,13 @@ export default function App() {
                        <div className="relative">
                          <input 
                            type="text" 
+                           inputMode="numeric"
+                           pattern="[0-9]*"
+                           dir="ltr"
                            name="regNumber" 
                            required 
-                           defaultValue={editFormData?.regNumber || ''} 
+                           onInput={handleNumericOnlyInput}
+                           defaultValue={toEnglishDigitsOnly(editFormData?.regNumber || '')} 
                            list="regNumbersList"
                            className={`w-full p-2.5 rounded-xl bg-slate-50 outline-none border ${currentTheme.ring} font-bold text-sm text-center leading-normal`}
                            placeholder="أدخل رقم القيد"
@@ -5878,8 +5909,11 @@ export default function App() {
               <div className="space-y-2">
                 <input
                   type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  dir="ltr"
                   value={newRegInput}
-                  onChange={(e) => setNewRegInput(e.target.value)}
+                  onChange={(e) => setNewRegInput(toEnglishDigitsOnly(e.target.value))}
                   className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 outline-none font-bold text-sm text-center"
                   placeholder="رقم القيد (مثال: 45)"
                   autoFocus
