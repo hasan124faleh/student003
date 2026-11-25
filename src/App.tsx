@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, startTransition, Suspense, useDeferredValue } from 'react';
 import { 
   Users, LogOut, Settings, Search, Plus, Printer, 
   Trash2, FileSpreadsheet, Download, Upload, AlertTriangle, 
@@ -20,28 +20,14 @@ import { initializeApp } from "firebase/app";
 import { 
   initializeFirestore, persistentLocalCache, collection, 
   getDocs, addDoc, doc, updateDoc, deleteDoc, writeBatch, 
-  onSnapshot, query, where, getCountFromServer, 
-  enableNetwork, disableNetwork 
+  onSnapshot, enableNetwork, disableNetwork 
 } from "firebase/firestore";
 import { 
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, 
   signOut, User 
 } from "firebase/auth";
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { 
-  ResponsiveContainer, 
-  PieChart, 
-  Pie, 
-  Cell, 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
-  Legend 
-} from 'recharts';
+
+const StatsModalContent = React.lazy(() => import('./StatsModal'));
 
 // ==========================================
 // FIREBASE CONFIG
@@ -144,10 +130,38 @@ const arabicFonts = [
     { id: 'Changa', name: 'تشانغا (Changa)', family: "'Changa', sans-serif", desc: 'عريض وواضح جداً' },
 ];
 
+const GOOGLE_FONT_PARAMS: Record<string, string> = {
+    'Cairo': 'Cairo:wght@400;500;600;700;800;900',
+    'Tajawal': 'Tajawal:wght@400;500;700;800;900',
+    'Almarai': 'Almarai:wght@400;700;800',
+    'IBM Plex Sans Arabic': 'IBM+Plex+Sans+Arabic:wght@400;500;600;700',
+    'Readex Pro': 'Readex+Pro:wght@400;500;600;700',
+    'Noto Kufi Arabic': 'Noto+Kufi+Arabic:wght@400;600;700;800',
+    'Amiri': 'Amiri:wght@400;700',
+    'Changa': 'Changa:wght@400;600;700;800',
+};
+
+const ensureGoogleFontsLoaded = (fontIds: string[]) => {
+    if (typeof document === 'undefined') return;
+    fontIds.forEach((id) => {
+        if (id === 'Cairo') return;
+        const param = GOOGLE_FONT_PARAMS[id];
+        if (!param) return;
+        const linkId = `gfont-${id.replace(/\s+/g, '-').toLowerCase()}`;
+        if (document.getElementById(linkId)) return;
+        const link = document.createElement('link');
+        link.id = linkId;
+        link.rel = 'stylesheet';
+        link.href = `https://fonts.googleapis.com/css2?family=${param}&display=swap`;
+        document.head.appendChild(link);
+    });
+};
+
 let activeFontFamily = "'Cairo', sans-serif";
 let activeFontScale = 1;
 
 let _measureCtx: CanvasRenderingContext2D | null = null;
+const _fontSizeCache = new Map<string, number>();
 const getSingleLineFontSize = (
     text: string,
     maxWidth: number,
@@ -158,6 +172,12 @@ const getSingleLineFontSize = (
     const scaledStart = Number((startSize * activeFontScale).toFixed(2));
     const scaledMin = Number((minSize * Math.min(1.12, Math.max(0.85, activeFontScale))).toFixed(2));
     if (!text || typeof document === 'undefined') return scaledStart;
+
+    const roundedMaxW = Math.round(maxWidth);
+    const cacheKey = `${activeFontFamily}|${scaledStart}|${scaledMin}|${weight}|${roundedMaxW}|${text}`;
+    const cached = _fontSizeCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
     if (!_measureCtx) {
         const canvas = document.createElement('canvas');
         _measureCtx = canvas.getContext('2d');
@@ -166,12 +186,17 @@ const getSingleLineFontSize = (
     let size = scaledStart;
     while (size > scaledMin) {
         _measureCtx.font = `${weight} ${size}px ${activeFontFamily}`;
-        if (_measureCtx.measureText(text).width * 1.05 <= maxWidth) {
-            return size;
+        if (_measureCtx.measureText(text).width * 1.05 <= roundedMaxW) {
+            break;
         }
         size -= 0.5;
     }
-    return scaledMin;
+    const result = size > scaledMin ? size : scaledMin;
+    if (_fontSizeCache.size >= 2000) {
+        _fontSizeCache.clear();
+    }
+    _fontSizeCache.set(cacheKey, result);
+    return result;
 };
 
 const normalizeArabicSearch = (text?: string): string => {
@@ -253,7 +278,8 @@ const formatDateForInput = (timestamp?: number) => {
     return new Date(timestamp).toISOString().split('T')[0];
 };
 
-const exportToExcel = (students: Student[]) => {
+const exportToExcel = async (students: Student[]) => {
+  const XLSX = await import('xlsx');
   const statusMap: Record<string, string> = { 'active': 'مستمر', 'transferred': 'منقول', 'left': 'تارك', 'graduated': 'متخرج' };
   const data = students.map(s => ({
     'الاسم الرباعي': cleanName(s.firstName),
@@ -277,7 +303,11 @@ const exportToExcel = (students: Student[]) => {
   XLSX.writeFile(workbook, "سجل_القيود_العام.xlsx");
 };
 
-const exportToPDF = (students: Student[], title = "سجل القيد العام") => {
+const exportToPDF = async (students: Student[], title = "سجل القيد العام") => {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -321,7 +351,8 @@ const exportToPDF = (students: Student[], title = "سجل القيد العام"
 };
 
 
-const readExcel = (file: File): Promise<any[]> => {
+const readExcel = async (file: File): Promise<any[]> => {
+  const XLSX = await import('xlsx');
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -1460,7 +1491,6 @@ interface ModernAppLayoutProps {
   currentTheme: { primary: string; hover: string; secondary: string; secondaryHover: string; ring: string; name: string };
   setSelectedId: (id: string | null) => void;
   setView: (v: 'list' | 'add' | 'edit' | 'detail' | 'trash' | 'settings' | 'stats') => void;
-  setSimilarStudents: (s: Student[]) => void;
   setPrintMode: (m: 'none' | 'list' | 'single' | 'selected' | 'docsExport') => void;
   setShowPrintModal: (b: boolean) => void;
   setShowPrintTemplateModal: (b: boolean) => void;
@@ -1509,7 +1539,6 @@ const ModernAppLayout = ({
   currentTheme,
   setSelectedId,
   setView,
-  setSimilarStudents,
   setPrintMode,
   setShowPrintModal,
   setShowPrintTemplateModal,
@@ -1524,11 +1553,32 @@ const ModernAppLayout = ({
   setVisibleCount,
   onOpenQuickStatus,
 }: ModernAppLayoutProps) => {
-  const activeCount = useMemo(() => students.filter(s => !s.isDeleted && (s.status === 'active' || !s.status)).length, [students]);
-  const transferredCount = useMemo(() => students.filter(s => !s.isDeleted && (s.status === 'transferred' || !!s.docDestination || !!s.docDate)).length, [students]);
-  const leftCount = useMemo(() => students.filter(s => !s.isDeleted && s.status === 'left').length, [students]);
-  const graduatedCount = useMemo(() => students.filter(s => !s.isDeleted && s.status === 'graduated').length, [students]);
-  const totalCount = useMemo(() => students.filter(s => !s.isDeleted).length, [students]);
+  const { activeCount, transferredCount, leftCount, graduatedCount, totalCount, regFilterOptions } = useMemo(() => {
+    let active = 0;
+    let transferred = 0;
+    let left = 0;
+    let graduated = 0;
+    let total = 0;
+    const regSet = new Set<string>();
+    for (let i = 0; i < students.length; i++) {
+      const s = students[i];
+      if (s.isDeleted) continue;
+      total++;
+      if (s.regNumber) regSet.add(s.regNumber);
+      if (s.status === 'active' || !s.status) active++;
+      if (s.status === 'transferred' || !!s.docDestination || !!s.docDate) transferred++;
+      if (s.status === 'left') left++;
+      if (s.status === 'graduated') graduated++;
+    }
+    return {
+      activeCount: active,
+      transferredCount: transferred,
+      leftCount: left,
+      graduatedCount: graduated,
+      totalCount: total,
+      regFilterOptions: Array.from(regSet).sort((a, b) => Number(a) - Number(b)),
+    };
+  }, [students]);
 
   const [copiedStudentId, setCopiedStudentId] = useState<string | null>(null);
   const [expandedStudentIds, setExpandedStudentIds] = useState<string[]>([]);
@@ -1822,7 +1872,7 @@ const ModernAppLayout = ({
           {!inSearchMode && (
             <div className="flex flex-wrap sm:flex-nowrap items-center justify-between sm:justify-start gap-1.5 sm:gap-2 shrink-0">
               <button 
-                onClick={() => { setSelectedId(null); setView('add'); setSimilarStudents([]); }} 
+                onClick={() => { setSelectedId(null); setView('add'); }} 
                 className={`min-h-8 sm:min-h-9 py-1.5 px-2.5 sm:px-3.5 ${currentTheme.primary} ${currentTheme.hover} text-white rounded-xl text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0`}
                 title="إضافة طالب جديد (Ctrl+N)"
               >
@@ -1920,7 +1970,7 @@ const ModernAppLayout = ({
                 aria-label="تصفية حسب دفتر القيد"
               >
                 <option value="">جميع دفاتر القيود</option>
-                {Array.from(new Set(students.filter(s => !s.isDeleted).map(s => s.regNumber))).sort((a,b) => Number(a)-Number(b)).map(r => (
+                {regFilterOptions.map(r => (
                   <option key={r} value={r}>قيد {r}</option>
                 ))}
               </select>
@@ -2228,7 +2278,7 @@ const ModernAppLayout = ({
                           </button>
                           <button
                             type="button"
-                            onClick={() => { setSelectedId(s.id); setView('edit'); setSimilarStudents([]); }}
+                            onClick={() => { setSelectedId(s.id); setView('edit'); }}
                             className="flex-1 py-1.5 rounded-lg bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 font-bold flex items-center justify-center gap-1 hover:bg-amber-100 transition-colors cursor-pointer"
                           >
                             <Edit2 size={13} /> تعديل
@@ -2422,7 +2472,7 @@ const ModernAppLayout = ({
                               <Eye size={15} />
                             </button>
                             <button 
-                              onClick={() => { setSelectedId(s.id); setView('edit'); setSimilarStudents([]); }} 
+                              onClick={() => { setSelectedId(s.id); setView('edit'); }} 
                               className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                               title="تعديل الطالب"
                             >
@@ -2626,7 +2676,7 @@ const ModernAppLayout = ({
                       <Eye size={13} /> عرض
                     </button>
                     <button 
-                      onClick={() => { setSelectedId(s.id); setView('edit'); setSimilarStudents([]); }} 
+                      onClick={() => { setSelectedId(s.id); setView('edit'); }} 
                       className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-amber-50 hover:text-amber-600 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 transition-colors flex items-center gap-1 cursor-pointer"
                     >
                       <Edit2 size={13} /> تعديل
@@ -2715,6 +2765,163 @@ const ModernAppLayout = ({
   );
 };
 
+const MAX_SIMILAR_DISPLAY = 15;
+
+interface FirstNameSimilarFieldProps {
+  students: Student[];
+  studentSearchIndex: Map<string, { normFull: string; normFullNoSpace: string }>;
+  selectedId: string | null;
+  defaultValue: string;
+  ringClass: string;
+  resetSignal: number;
+  onVoiceInput: (setter: (val: string) => void) => void;
+}
+
+const FirstNameSimilarField = React.memo(({
+  students,
+  studentSearchIndex,
+  selectedId,
+  defaultValue,
+  ringClass,
+  resetSignal,
+  onVoiceInput,
+}: FirstNameSimilarFieldProps) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const debounceTimerRef = useRef<number | null>(null);
+  const [similarState, setSimilarState] = useState<{ items: Student[]; total: number }>({
+    items: [],
+    total: 0,
+  });
+
+  useEffect(() => {
+    if (inputRef.current && inputRef.current.value !== defaultValue) {
+      inputRef.current.value = defaultValue;
+    }
+    setSimilarState(prev => (prev.total === 0 ? prev : { items: [], total: 0 }));
+  }, [defaultValue, selectedId, resetSignal]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current !== null) {
+        window.clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
+
+  const runSimilarityCheck = useCallback((rawValue: string) => {
+    const name = rawValue.trim();
+    if (name.length < 2) {
+      setSimilarState(prev => (prev.total === 0 ? prev : { items: [], total: 0 }));
+      return;
+    }
+
+    const prepared = prepareArabicQuery(name);
+    if (!prepared.normQueryNoSpace) {
+      setSimilarState(prev => (prev.total === 0 ? prev : { items: [], total: 0 }));
+      return;
+    }
+
+    const ranked: { student: Student; rank: number }[] = [];
+    for (let i = 0; i < students.length; i++) {
+      const s = students[i];
+      if (s.isDeleted || s.id === selectedId) continue;
+      const entry = studentSearchIndex.get(s.id);
+      const rank = entry
+        ? getStudentSearchRankFast(entry, prepared)
+        : getStudentSearchRank(s, name);
+      if (rank !== -1) {
+        ranked.push({ student: s, rank });
+      }
+    }
+
+    if (ranked.length === 0) {
+      startTransition(() => {
+        setSimilarState(prev => (prev.total === 0 ? prev : { items: [], total: 0 }));
+      });
+      return;
+    }
+
+    ranked.sort((a, b) => a.rank - b.rank);
+    const topItems = ranked.slice(0, MAX_SIMILAR_DISPLAY).map(r => r.student);
+    const total = ranked.length;
+
+    startTransition(() => {
+      setSimilarState({ items: topItems, total });
+    });
+  }, [students, studentSearchIndex, selectedId]);
+
+  const scheduleCheck = useCallback((val: string) => {
+    if (debounceTimerRef.current !== null) {
+      window.clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    if (val.trim().length < 2) {
+      setSimilarState(prev => (prev.total === 0 ? prev : { items: [], total: 0 }));
+      return;
+    }
+    debounceTimerRef.current = window.setTimeout(() => {
+      debounceTimerRef.current = null;
+      runSimilarityCheck(val);
+    }, 150);
+  }, [runSimilarityCheck]);
+
+  return (
+    <div>
+      <div className="relative">
+        <input
+          ref={inputRef}
+          name="firstName"
+          required
+          defaultValue={defaultValue}
+          className={`w-full p-2.5 rounded-xl bg-slate-50 outline-none border ${ringClass} font-bold text-sm`}
+          placeholder="الاسم الرباعي"
+          onChange={(e) => scheduleCheck(e.target.value)}
+          autoComplete="off"
+        />
+        <button
+          type="button"
+          onClick={() => onVoiceInput((val) => {
+            if (inputRef.current) {
+              inputRef.current.value = val;
+            }
+            runSimilarityCheck(val);
+          })}
+          className="absolute left-2 top-1/2 transform -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 transition-colors"
+          data-tooltip="إدخال صوتي"
+        >
+          <Mic size={18} />
+        </button>
+      </div>
+      {similarState.items.length > 0 && (
+        <div className="mt-2 bg-amber-50 border border-amber-200 rounded-xl p-2 animate-fade-in">
+          <div className="flex items-center justify-between gap-1 text-amber-800 font-bold text-[10px] mb-1">
+            <span className="flex items-center gap-1">
+              <AlertTriangle size={12} />
+              <span>تنبيه: توجد أسماء مشابهة مسجلة مسبقاً</span>
+            </span>
+            {similarState.total > similarState.items.length && (
+              <span className="text-[9px] text-amber-700">
+                أقرب {similarState.items.length} من {similarState.total}
+              </span>
+            )}
+          </div>
+          <div className="max-h-24 overflow-y-auto space-y-1">
+            {similarState.items.map(s => (
+              <div key={s.id} className="flex justify-between items-center bg-white p-1.5 rounded-lg border border-amber-100 text-[10px]">
+                <span className="font-bold text-slate-700 truncate ml-1">{cleanName(s.firstName)} {s.lastName || ''}</span>
+                <div className="flex gap-1 flex-shrink-0">
+                  <span className="bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded font-mono font-bold">صفحة {s.pageNumber}</span>
+                  <span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-mono font-bold">قيد {s.regNumber}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -2722,14 +2929,14 @@ export default function App() {
   const [view, setView] = useState<'list' | 'add' | 'edit' | 'detail' | 'trash' | 'settings' | 'stats'>('list');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const debouncedQuery = search;
+  const debouncedQuery = useDeferredValue(search);
   const [selectedRegFilter, setSelectedRegFilter] = useState(''); 
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState('recent');
   const [yearFilter, setYearFilter] = useState('ALL');
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [printRegInput, setPrintRegInput] = useState('');
-  const [visibleCount, setVisibleCount] = useState(40);
+  const [visibleCount, setVisibleCount] = useState(30);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
@@ -2742,7 +2949,7 @@ export default function App() {
   const [alertConfig, setAlertConfig] = useState<{ message: string; type: 'error' | 'success' | 'warning' } | null>(null);
   const [confirmConfig, setConfirmConfig] = useState<{ title: string; message: string; onConfirm: () => void; isDestructive?: boolean } | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const [similarStudents, setSimilarStudents] = useState<Student[]>([]);
+  const [formResetCount, setFormResetCount] = useState(0);
   const [colorTheme, setColorTheme] = useState(localStorage.getItem('appTheme') || 'slate');
   const [isDarkMode, setIsDarkMode] = useState(localStorage.getItem('darkMode') === 'true');
   const [appFont, setAppFont] = useState<string>(() => localStorage.getItem('appFont') || 'Cairo');
@@ -2878,7 +3085,6 @@ export default function App() {
         e.preventDefault();
         setSelectedId(null);
         setView('add');
-        setSimilarStudents([]);
       }
       if (e.key === 'Escape') {
         setShowPrintModal(false);
@@ -2953,81 +3159,65 @@ export default function App() {
     recognition.start();
   };
 
-  const regsCount = useMemo(() => {
-     return new Set(students.filter(s => !s.isDeleted).map(s => s.regNumber)).size;
+  const { activeStudentsCount, activeRegNumbers, years } = useMemo(() => {
+     let activeCount = 0;
+     const regSet = new Set<string>();
+     const yearSet = new Set<number>();
+     for (let i = 0; i < students.length; i++) {
+       const s = students[i];
+       const yr = new Date(s.createdAt).getFullYear();
+       if (!isNaN(yr)) yearSet.add(yr);
+       if (!s.isDeleted) {
+         activeCount++;
+         if (s.regNumber) regSet.add(s.regNumber);
+       }
+     }
+     return {
+       activeStudentsCount: activeCount,
+       activeRegNumbers: Array.from(regSet).sort((a, b) => Number(a) - Number(b)),
+       years: Array.from(yearSet).sort((a, b) => b - a),
+     };
   }, [students]);
 
-  const regStats = useMemo(() => {
-     const active = students.filter(s => !s.isDeleted);
-     const statsMap: Record<string, { total: number; active: number; transferred: number; left: number; graduated: number }> = {};
-     active.forEach(s => {
-         const reg = s.regNumber;
-         if (!statsMap[reg]) {
-             statsMap[reg] = { total: 0, active: 0, transferred: 0, left: 0, graduated: 0 };
-         }
-         statsMap[reg].total++;
-         const status = s.status || 'active';
-         if (statsMap[reg][status] !== undefined) {
-             statsMap[reg][status]++;
-         }
-     });
-     return Object.entries(statsMap).map(([reg, counts]) => ({ reg, ...counts })).sort((a, b) => Number(a.reg) - Number(b.reg));
-  }, [students]);
-
-  const years = useMemo(() => {
-     const y = new Set(students.map(s => {
-        const d = new Date(s.createdAt);
-        return isNaN(d.getFullYear()) ? null : d.getFullYear();
-     }).filter(y => y !== null));
-     return (Array.from(y) as number[]).sort((a,b) => b - a);
-  }, [students]);
+  const regsCount = activeRegNumbers.length;
 
   const docYears = useMemo(() => {
+     if (!showPrintModal) return [];
      const ySet = new Set<string>();
-     students
-       .filter(s => !s.isDeleted && (s.status === 'transferred' || !!s.docDestination || !!s.docDate))
-       .forEach(s => {
-         if (s.docDate && s.docDate.length >= 4) {
-           ySet.add(s.docDate.substring(0, 4));
-         }
-         const createdYear = new Date(s.createdAt).getFullYear();
-         if (!isNaN(createdYear)) {
-           ySet.add(createdYear.toString());
-         }
-       });
+     students.forEach(s => {
+       if (s.isDeleted || !(s.status === 'transferred' || !!s.docDestination || !!s.docDate)) return;
+       if (s.docDate && s.docDate.length >= 4) {
+         ySet.add(s.docDate.substring(0, 4));
+       }
+       const createdYear = new Date(s.createdAt).getFullYear();
+       if (!isNaN(createdYear)) {
+         ySet.add(createdYear.toString());
+       }
+     });
      years.forEach(y => ySet.add(y.toString()));
      return Array.from(ySet).sort((a, b) => Number(b) - Number(a));
-  }, [students, years]);
+  }, [students, years, showPrintModal]);
 
   const transferredCountForYear = useMemo(() => {
-    return students.filter(s => {
-      if (s.isDeleted) return false;
+    if (!showPrintModal) return 0;
+    let count = 0;
+    for (let i = 0; i < students.length; i++) {
+      const s = students[i];
+      if (s.isDeleted) continue;
       const isTrans = s.status === 'transferred' || !!s.docDestination || !!s.docDate;
-      if (!isTrans) return false;
-      if (docsExportYear === 'ALL') return true;
+      if (!isTrans) continue;
+      if (docsExportYear === 'ALL') {
+        count++;
+        continue;
+      }
       const yearFromDoc = s.docDate ? s.docDate.substring(0, 4) : '';
       const yearFromCreated = new Date(s.createdAt).getFullYear().toString();
-      return yearFromDoc === docsExportYear || (!yearFromDoc && yearFromCreated === docsExportYear);
-    }).length;
-  }, [students, docsExportYear]);
-
-  const refreshStats = async () => {
-     try {
-         const baseConstraints = [where("isDeleted", "==", false)];
-         if (selectedRegFilter) baseConstraints.push(where("regNumber", "==", selectedRegFilter));
-         
-         const totalQ = query(studentsCollection, ...baseConstraints);
-         await getCountFromServer(totalQ);
-     } catch (error) {
-         console.error("Error fetching stats:", error);
-     }
-  };
-
-  useEffect(() => {
-     if (user) {
-         refreshStats();
-     }
-  }, [user, selectedRegFilter]);
+      if (yearFromDoc === docsExportYear || (!yearFromDoc && yearFromCreated === docsExportYear)) {
+        count++;
+      }
+    }
+    return count;
+  }, [students, docsExportYear, showPrintModal]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -3059,7 +3249,7 @@ export default function App() {
 
   const isTrashView = view === 'trash';
   useEffect(() => {
-    setVisibleCount(40);
+    setVisibleCount(30);
   }, [search, selectedRegFilter, statusFilter, yearFilter, sortBy, isTrashView]);
 
   useEffect(() => {
@@ -3106,7 +3296,14 @@ export default function App() {
     const fontObj = arabicFonts.find(f => f.id === appFont) || arabicFonts[0];
     localStorage.setItem('appFont', fontObj.id);
     document.documentElement.style.setProperty('--app-font-family', fontObj.family);
+    ensureGoogleFontsLoaded([fontObj.id]);
   }, [appFont]);
+
+  useEffect(() => {
+    if (showThemeModal) {
+      ensureGoogleFontsLoaded(arabicFonts.map(f => f.id));
+    }
+  }, [showThemeModal]);
 
   useEffect(() => {
     const clamped = Math.min(1.25, Math.max(0.85, Number(fontScale.toFixed(2))));
@@ -3188,7 +3385,6 @@ export default function App() {
         updates.graduationGrade = quickGradGrade.trim();
       }
       await updateDoc(doc(db, "students", quickStatusStudent.id), updates as any);
-      await refreshStats();
       const studentName = cleanName(quickStatusStudent.firstName);
       setQuickStatusStudent(null);
       const statusAr = quickStatusValue === 'active' ? 'مستمر' : quickStatusValue === 'transferred' ? 'منقول' : quickStatusValue === 'left' ? 'تارك' : 'متخرج';
@@ -3312,7 +3508,6 @@ export default function App() {
       }
       
       setImportProgress(100);
-      await refreshStats();
       let msg = `تم استيراد ${importedCount} سجل بنجاح.`;
       if (skippedCount > 0) {
          msg += ` تم تخطي ${skippedCount} سجل لعدم احتوائها على رقم قيد أو رقم صفحة صحيح.`;
@@ -3339,7 +3534,6 @@ export default function App() {
           chunk.forEach((d) => batch.delete(d.ref));
           await batch.commit();
        }
-       await refreshStats();
        setAlertConfig({ message: 'تم حذف جميع البيانات بنجاح', type: 'success' });
        setView('list');
      } catch { setAlertConfig({ message: "فشل حذف البيانات", type: 'error' }); }
@@ -3349,7 +3543,6 @@ export default function App() {
   const handleRestore = async (id: string) => {
     try {
         await updateDoc(doc(db, "students", id), { isDeleted: false });
-        await refreshStats();
         setAlertConfig({ message: 'تمت استعادة السجل بنجاح', type: 'success' });
     } catch(e) { console.error(e); }
   };
@@ -3361,7 +3554,6 @@ export default function App() {
       isDestructive: true,
       onConfirm: async () => {
         await updateDoc(doc(db, "students", id), { isDeleted: true });
-        await refreshStats();
         setConfirmConfig(null);
         setAlertConfig({ message: 'تم نقل الطالب إلى سلة المحذوفات', type: 'success' });
       }
@@ -3386,7 +3578,6 @@ export default function App() {
             batch.update(ref, { isDeleted: true });
           });
           await batch.commit();
-          await refreshStats();
           setSelectedStudents([]);
           setConfirmConfig(null);
           setAlertConfig({ message: `تم نقل ${selectedStudents.length} طالب إلى سلة المحذوفات`, type: 'success' });
@@ -3405,29 +3596,14 @@ export default function App() {
         isDestructive: true,
         onConfirm: async () => {
             await deleteDoc(doc(db, "students", id));
-            await refreshStats();
             setConfirmConfig(null);
             setAlertConfig({ message: 'تم الحذف النهائي', type: 'success' });
         }
     });
   };
 
-  const checkSimilarStudents = (val: string) => {
-    const name = val.trim();
-    if (name.length < 2) {
-        setSimilarStudents([]);
-        return;
-    }
-    const matches = students.filter(s => 
-        !s.isDeleted && 
-        s.id !== selectedId &&
-        getStudentSearchRank(s, name) !== -1
-    );
-    setSimilarStudents(matches);
-  };
-
   // Voice input for form fields
-  const startVoiceInput = (_fieldName: string, setter: (val: string) => void) => {
+  const startVoiceInput = useCallback((_fieldName: string, setter: (val: string) => void) => {
     const anyWindow = window as any;
     if (!('webkitSpeechRecognition' in anyWindow) && !('SpeechRecognition' in anyWindow)) {
       setAlertConfig({ message: 'متصفحك لا يدعم الإدخال الصوتي', type: 'error' });
@@ -3460,7 +3636,16 @@ export default function App() {
     };
     
     recognition.start();
-  };
+  }, []);
+
+  const handleFirstNameVoiceInput = useCallback((setter: (val: string) => void) => {
+    startVoiceInput('firstName', setter);
+  }, [startVoiceInput]);
+
+  const regNumberOptions = useMemo(() => {
+    if (customRegs.length === 0) return activeRegNumbers;
+    return Array.from(new Set([...activeRegNumbers, ...customRegs])).sort((a, b) => Number(a) - Number(b));
+  }, [activeRegNumbers, customRegs]);
 
   const shareViaWhatsApp = (studentsToShare: Student[]) => {
     const statusMap: Record<string, string> = { 'active': 'مستمر', 'transferred': 'منقول', 'left': 'تارك', 'graduated': 'متخرج' };
@@ -3525,7 +3710,6 @@ export default function App() {
     } else {
        if (sortBy === 'alphabetical') res.sort((a,b) => arCollator.compare(a.firstName, b.firstName));
        else if (sortBy === 'byPage') res.sort((a,b) => Number(a.pageNumber) - Number(b.pageNumber));
-       else res.sort((a,b) => b.createdAt - a.createdAt);
     }
     return res;
   }, [students, studentSearchIndex, debouncedQuery, selectedRegFilter, statusFilter, sortBy, yearFilter, view]);
@@ -3601,7 +3785,7 @@ export default function App() {
                     سجل القيد العام
                   </h1>
                   <span className="text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 hidden md:inline-block shrink-0">
-                    {students.filter(s => !s.isDeleted).length} طالب
+                    {activeStudentsCount} طالب
                   </span>
                 </div>
                 <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 dark:text-slate-400 leading-tight truncate max-w-[140px] xs:max-w-[200px] sm:max-w-none">
@@ -3945,7 +4129,6 @@ export default function App() {
                         currentTheme={currentTheme}
                         setSelectedId={setSelectedId}
                         setView={setView}
-                        setSimilarStudents={setSimilarStudents}
                         setPrintMode={setPrintMode}
                         setShowPrintModal={setShowPrintModal}
                         setShowPrintTemplateModal={setShowPrintTemplateModal}
@@ -3968,7 +4151,7 @@ export default function App() {
                     <div className={`${inSearchMode ? 'hidden' : 'grid'} grid-cols-2 lg:grid-cols-3 gap-3`}>
                         <StatCard 
                           title="إجمالي الطلاب" 
-                          value={students.filter(s => !s.isDeleted).length} 
+                          value={activeStudentsCount} 
                           icon={<Users size={18}/>} 
                           colorClass={currentTheme.secondary}
                           tooltip="عدد الطلاب المسجلين في النظام"
@@ -4151,7 +4334,7 @@ export default function App() {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-center mb-4 animate-fade-in">
                         <select value={selectedRegFilter} onChange={(e) => setSelectedRegFilter(e.target.value)} className="bg-white rounded-lg px-2 py-2 border border-slate-200 text-xs font-bold outline-none h-9">
                             <option value="">جميع القيود</option>
-                            {Array.from(new Set(students.filter(s => !s.isDeleted).map(s => s.regNumber))).sort((a,b) => Number(a)-Number(b)).map(r => (
+                            {activeRegNumbers.map(r => (
                               <option key={r} value={r}>قيد {r}</option>
                             ))}
                         </select>
@@ -4177,7 +4360,7 @@ export default function App() {
                   {/* Action Buttons */}
                   <div className={`${inSearchMode ? 'hidden' : 'flex'} flex-wrap gap-2`}>
                         <button 
-                          onClick={() => { setSelectedId(null); setView('add'); setSimilarStudents([]); }} 
+                          onClick={() => { setSelectedId(null); setView('add'); }} 
                           data-tooltip="إضافة طالب جديد (Ctrl+N)"
                           className={`flex-1 min-w-[120px] ${currentTheme.primary} ${currentTheme.hover} text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-lg transition-colors`}
                         >
@@ -4598,7 +4781,7 @@ export default function App() {
 
         {/* Add/Edit Modal (SWAPPED: Page input before Reg input) */}
         {(view === 'add' || view === 'edit') && (
-            <Modal onClose={() => { setView('list'); setSimilarStudents([]); setEditFormData(null); setSavedStudentName(null); setFormTransferGrade(''); }}>
+            <Modal onClose={() => { setView('list'); setEditFormData(null); setSavedStudentName(null); setFormTransferGrade(''); }}>
               <div className="bg-white rounded-2xl shadow-2xl p-5 space-y-4 max-h-[80vh] overflow-y-auto">
                 <h2 className="text-lg font-bold">{view === 'add' ? 'إضافة طالب جديد' : 'تعديل بيانات الطالب'}</h2>
                 
@@ -4672,7 +4855,6 @@ export default function App() {
                             setSavedStudentName({ name: `${cleanName(fName)} ${lName}`.trim(), page: pageNum, reg: regNum });
                             setAlertConfig({ message: 'تم تعديل البيانات بنجاح', type: 'success' });
                             setView('list');
-                            setSimilarStudents([]);
                             setEditFormData(null);
                             setFormTransferGrade('');
                         } else {
@@ -4687,59 +4869,22 @@ export default function App() {
                             setFormGraduationGrade('السادس العلمي');
                             setDocPurposeType('إكمال الدراسة');
                             setCustomDocPurpose('');
-                            setSimilarStudents([]);
+                            setFormResetCount(c => c + 1);
                         }
-                        await refreshStats();
                     } catch(err) { 
                         console.error(err);
                         setAlertConfig({ message: "حدث خطأ أثناء الحفظ", type: 'error' }); 
                     }
                 }} className="space-y-3">
-                   <div>
-                       <div className="relative">
-                         <input 
-                           name="firstName" 
-                           required 
-                           defaultValue={editFormData?.firstName || ''} 
-                           className={`w-full p-2.5 rounded-xl bg-slate-50 outline-none border ${currentTheme.ring} font-bold text-sm`} 
-                           placeholder="الاسم الرباعي" 
-                           onChange={(e) => checkSimilarStudents(e.target.value)} 
-                           autoComplete="off"
-                         />
-                         <button
-                           type="button"
-                           onClick={() => startVoiceInput('firstName', (val) => {
-                             const input = document.querySelector('input[name="firstName"]') as HTMLInputElement;
-                             if (input) input.value = val;
-                             checkSimilarStudents(val);
-                           })}
-                           className="absolute left-2 top-1/2 transform -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 transition-colors"
-                           data-tooltip="إدخال صوتي"
-                         >
-                           <Mic size={18} />
-                         </button>
-                       </div>
-                       {similarStudents.length > 0 && (
-                           <div className="mt-2 bg-amber-50 border border-amber-200 rounded-xl p-2 animate-fade-in">
-                               <div className="flex items-center gap-1 text-amber-800 font-bold text-[10px] mb-1">
-                                    <AlertTriangle size={12}/>
-                                   <span>تنبيه: توجد أسماء مشابهة مسجلة مسبقاً</span>
-                               </div>
-                               <div className="max-h-24 overflow-y-auto space-y-1">
-                                   {similarStudents.map(s => (
-                                       <div key={s.id} className="flex justify-between items-center bg-white p-1.5 rounded-lg border border-amber-100 text-[10px]">
-                                           <span className="font-bold text-slate-700 truncate ml-1">{cleanName(s.firstName)} {s.lastName || ''}</span>
-                                           <div className="flex gap-1 flex-shrink-0">
-                                               {/* SWAPPED: صفحة then قيد */}
-                                               <span className="bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded font-mono font-bold">صفحة {s.pageNumber}</span>
-                                               <span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-mono font-bold">قيد {s.regNumber}</span>
-                                           </div>
-                                       </div>
-                                   ))}
-                               </div>
-                           </div>
-                       )}
-                   </div>
+                   <FirstNameSimilarField
+                     students={students}
+                     studentSearchIndex={studentSearchIndex}
+                     selectedId={selectedId}
+                     defaultValue={editFormData?.firstName || ''}
+                     ringClass={currentTheme.ring}
+                     resetSignal={formResetCount}
+                     onVoiceInput={handleFirstNameVoiceInput}
+                   />
                    <div className="relative">
                      <input name="lastName" defaultValue={editFormData?.lastName || ''} className={`w-full p-2.5 rounded-xl bg-slate-50 outline-none border ${currentTheme.ring} font-bold text-sm`} placeholder="العائلة (اختياري)" />
                      <button
@@ -4780,10 +4925,7 @@ export default function App() {
                            placeholder="أدخل رقم القيد"
                          />
                          <datalist id="regNumbersList">
-                           {Array.from(new Set([
-                             ...students.filter(s => !s.isDeleted).map(s => s.regNumber),
-                             ...customRegs
-                           ])).sort((a, b) => Number(a) - Number(b)).map(r => (
+                           {regNumberOptions.map(r => (
                              <option key={r} value={r}>قيد {r}</option>
                            ))}
                          </datalist>
@@ -5124,7 +5266,7 @@ export default function App() {
                        <Save size={16}/> حفظ البيانات
                      </button>
                      {view === 'add' && (
-                       <button type="button" onClick={() => { setView('list'); setSimilarStudents([]); setSavedStudentName(null); }} className="px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">
+                       <button type="button" onClick={() => { setView('list'); setSavedStudentName(null); }} className="px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">
                          إغلاق
                        </button>
                      )}
@@ -5573,360 +5715,29 @@ export default function App() {
           </Modal>
         )}
 
-        {/* Stats Modal with Recharts Visualizations */}
-        {view === 'stats' && (() => {
-          const activeStudents = students.filter(s => !s.isDeleted);
-          const activeTotal = activeStudents.filter(s => !s.status || s.status === 'active').length;
-          const transferredTotal = activeStudents.filter(s => s.status === 'transferred' || !!s.docDestination || !!s.docDate).length;
-          const leftTotal = activeStudents.filter(s => s.status === 'left').length;
-          const graduatedTotal = activeStudents.filter(s => s.status === 'graduated').length;
-          const grandTotal = activeStudents.length;
-
-          const pieData = [
-            { name: 'مستمر', value: activeTotal, color: '#10b981' },
-            { name: 'منقول', value: transferredTotal, color: '#f59e0b' },
-            { name: 'تارك', value: leftTotal, color: '#ef4444' },
-            { name: 'متخرج', value: graduatedTotal, color: '#3b82f6' }
-          ].filter(item => item.value > 0);
-
-          const barData = regStats.map(r => ({
-            name: `قيد ${r.reg}`,
-            مستمر: r.active,
-            منقول: r.transferred,
-            تارك: r.left,
-            متخرج: r.graduated,
-            total: r.total
-          }));
-
-          return (
-            <Modal onClose={() => setView('list')} maxWidth="max-w-5xl">
-              <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl pt-7 px-4 pb-4 sm:p-6 space-y-4 max-h-[88vh] flex flex-col w-full text-right border border-slate-100 dark:border-slate-800">
-                {/* Header (clear of Modal's top drag handle and left X button) */}
-                <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-3 pl-9">
-                  <div className="p-2.5 rounded-2xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 shadow-xs shrink-0">
-                    <BarChart3 size={22} />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="text-base sm:text-lg font-black text-slate-800 dark:text-slate-100 leading-tight truncate">
-                      لوحة الإحصائيات والرسوم البيانية
-                    </h2>
-                    <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                      توزيع حالات الطلاب عبر دفاتر القيود
-                    </p>
-                  </div>
+        {/* Stats Modal with Recharts Visualizations (Lazy-loaded) */}
+        {view === 'stats' && (
+          <Modal onClose={() => setView('list')} maxWidth="max-w-5xl">
+            <Suspense
+              fallback={
+                <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-10 flex flex-col items-center justify-center gap-3 border border-slate-100 dark:border-slate-800">
+                  <Loader2 size={36} className="animate-spin text-blue-600" />
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400">جاري تحميل الإحصائيات والرسوم البيانية...</span>
                 </div>
-
-                <div className="overflow-y-auto flex-1 custom-scrollbar space-y-4 px-0.5">
-                  {/* Summary Metric Cards (Symmetric 1 + 2x2 on mobile, 5 columns on desktop) */}
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-                    <div className="col-span-2 sm:col-span-1 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex sm:block items-center justify-between">
-                      <div>
-                        <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400">إجمالي الطلاب</div>
-                        <div className="text-[10px] text-slate-400 mt-0.5"><span dir="ltr">100%</span> من المسجلين</div>
-                      </div>
-                      <div className="text-2xl font-black text-slate-800 dark:text-slate-100 font-mono sm:mt-1">{grandTotal}</div>
-                    </div>
-                    <div className="bg-emerald-50/70 dark:bg-emerald-950/30 p-3 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/60">
-                      <div className="flex items-center justify-between">
-                        <div className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span> مستمر
-                        </div>
-                        <span dir="ltr" className="text-[10px] font-bold text-emerald-600/90 dark:text-emerald-400 bg-emerald-100/70 dark:bg-emerald-900/50 px-1.5 py-0.5 rounded-md">
-                          {grandTotal > 0 ? Math.round((activeTotal / grandTotal) * 100) : 0}%
-                        </span>
-                      </div>
-                      <div className="text-xl sm:text-2xl font-black text-emerald-700 dark:text-emerald-400 font-mono mt-1">{activeTotal}</div>
-                    </div>
-                    <div className="bg-amber-50/70 dark:bg-amber-950/30 p-3 rounded-2xl border border-amber-200/80 dark:border-amber-900/60">
-                      <div className="flex items-center justify-between">
-                        <div className="text-[11px] font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-amber-500"></span> منقول
-                        </div>
-                        <span dir="ltr" className="text-[10px] font-bold text-amber-700/90 dark:text-amber-400 bg-amber-100/70 dark:bg-amber-900/50 px-1.5 py-0.5 rounded-md">
-                          {grandTotal > 0 ? Math.round((transferredTotal / grandTotal) * 100) : 0}%
-                        </span>
-                      </div>
-                      <div className="text-xl sm:text-2xl font-black text-amber-700 dark:text-amber-400 font-mono mt-1">{transferredTotal}</div>
-                    </div>
-                    <div className="bg-rose-50/70 dark:bg-rose-950/30 p-3 rounded-2xl border border-rose-200/80 dark:border-rose-900/60">
-                      <div className="flex items-center justify-between">
-                        <div className="text-[11px] font-bold text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-rose-500"></span> تارك
-                        </div>
-                        <span dir="ltr" className="text-[10px] font-bold text-rose-600/90 dark:text-rose-400 bg-rose-100/70 dark:bg-rose-900/50 px-1.5 py-0.5 rounded-md">
-                          {grandTotal > 0 ? Math.round((leftTotal / grandTotal) * 100) : 0}%
-                        </span>
-                      </div>
-                      <div className="text-xl sm:text-2xl font-black text-rose-700 dark:text-rose-400 font-mono mt-1">{leftTotal}</div>
-                    </div>
-                    <div className="bg-blue-50/70 dark:bg-blue-950/30 p-3 rounded-2xl border border-blue-200/80 dark:border-blue-900/60">
-                      <div className="flex items-center justify-between">
-                        <div className="text-[11px] font-bold text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-blue-500"></span> متخرج
-                        </div>
-                        <span dir="ltr" className="text-[10px] font-bold text-blue-600/90 dark:text-blue-400 bg-blue-100/70 dark:bg-blue-900/50 px-1.5 py-0.5 rounded-md">
-                          {grandTotal > 0 ? Math.round((graduatedTotal / grandTotal) * 100) : 0}%
-                        </span>
-                      </div>
-                      <div className="text-xl sm:text-2xl font-black text-blue-700 dark:text-blue-400 font-mono mt-1">{graduatedTotal}</div>
-                    </div>
-                  </div>
-
-                  {/* Recharts Graphical Visualizations */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
-                    {/* 1. Status Distribution Donut Chart */}
-                    <div className="p-3.5 sm:p-4 bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex flex-col">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                          <span>🥧</span> توزيع الطلاب حسب الحالة
-                        </h3>
-                        <span className="text-[10px] font-bold text-slate-400">مخطط دائري</span>
-                      </div>
-                      <div className="h-56 sm:h-64 w-full flex items-center justify-center">
-                        {pieData.length > 0 ? (
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={pieData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={50}
-                                outerRadius={76}
-                                paddingAngle={3}
-                                dataKey="value"
-                              >
-                                {pieData.map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={entry.color} />
-                                ))}
-                              </Pie>
-                              <Tooltip 
-                                formatter={(value: any, name: any) => [`${value} طالب`, name]}
-                                contentStyle={{ 
-                                  direction: 'rtl', 
-                                  backgroundColor: '#1e293b', 
-                                  color: '#f8fafc', 
-                                  borderRadius: '12px', 
-                                  border: 'none', 
-                                  fontSize: '11px',
-                                  fontWeight: 'bold' 
-                                }}
-                              />
-                              <Legend 
-                                verticalAlign="bottom" 
-                                height={34} 
-                                formatter={(value) => <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mx-1">{value}</span>}
-                              />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        ) : (
-                          <div className="text-xs text-slate-400 font-bold">لا توجد بيانات كافية للرسم</div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* 2. Registration Books Stacked Bar Chart */}
-                    <div className="p-3.5 sm:p-4 bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex flex-col">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                          <span>📊</span> توزيع الحالات حسب دفتر القيد
-                        </h3>
-                        <span className="text-[10px] font-bold text-slate-400">{barData.length} دفاتر قيد</span>
-                      </div>
-                      <div className="h-56 sm:h-64 w-full flex items-center justify-center">
-                        {barData.length > 0 ? (
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={barData} margin={{ top: 10, right: 6, left: -18, bottom: 0 }}>
-                              <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 'bold' }} />
-                              <YAxis tick={{ fontSize: 10 }} />
-                              <Tooltip 
-                                formatter={(value: any, name: any) => [`${value} طالب`, name]}
-                                contentStyle={{ 
-                                  direction: 'rtl', 
-                                  backgroundColor: '#1e293b', 
-                                  color: '#f8fafc', 
-                                  borderRadius: '12px', 
-                                  border: 'none', 
-                                  fontSize: '11px',
-                                  fontWeight: 'bold' 
-                                }}
-                              />
-                              <Legend 
-                                verticalAlign="bottom" 
-                                height={34} 
-                                formatter={(value) => <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mx-1">{value}</span>}
-                              />
-                              <Bar dataKey="مستمر" fill="#10b981" stackId="a" />
-                              <Bar dataKey="منقول" fill="#f59e0b" stackId="a" />
-                              <Bar dataKey="تارك" fill="#ef4444" stackId="a" />
-                              <Bar dataKey="متخرج" fill="#3b82f6" stackId="a" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        ) : (
-                          <div className="text-xs text-slate-400 font-bold">لا توجد بيانات كافية للرسم</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Detailed Breakdown by Registration Book */}
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                        <span>📑</span> تفاصيل القيود ({regStats.length})
-                      </h3>
-                      <span className="text-[10px] font-bold text-slate-400">انقر على أي قيد لعرض طلابه</span>
-                    </div>
-
-                    {/* Mobile Cards (< md): Clean, non-wrapping badges + visual distribution bar */}
-                    <div className="md:hidden space-y-2.5">
-                      {regStats.length > 0 ? regStats.map((item) => {
-                        const pctActive = item.total > 0 ? Math.round((item.active / item.total) * 100) : 0;
-                        const pctTransferred = item.total > 0 ? Math.round((item.transferred / item.total) * 100) : 0;
-                        const pctLeft = item.total > 0 ? Math.round((item.left / item.total) * 100) : 0;
-                        const pctGraduated = item.total > 0 ? Math.round((item.graduated / item.total) * 100) : 0;
-                        return (
-                          <div
-                            key={item.reg}
-                            onClick={() => { setSelectedRegFilter(item.reg); setView('list'); }}
-                            className="bg-slate-50/70 dark:bg-slate-800/50 rounded-2xl p-3 border border-slate-200/80 dark:border-slate-700/80 space-y-2.5 cursor-pointer active:scale-[0.99] transition-transform"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className={`${currentTheme.primary} text-white px-2.5 py-1 rounded-lg font-mono text-xs font-bold whitespace-nowrap inline-flex items-center`}>
-                                قيد {item.reg}
-                              </span>
-                              <div className="flex items-center gap-1.5 whitespace-nowrap">
-                                <span className="text-sm font-black text-slate-900 dark:text-slate-100 font-mono">{item.total}</span>
-                                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">طالب</span>
-                              </div>
-                            </div>
-
-                            {/* Visual Stacked Distribution Bar */}
-                            <div className="w-full h-2 rounded-full bg-slate-200/80 dark:bg-slate-700 overflow-hidden flex">
-                              {item.active > 0 && <div style={{ width: `${(item.active / item.total) * 100}%` }} className="bg-emerald-500 h-full" />}
-                              {item.transferred > 0 && <div style={{ width: `${(item.transferred / item.total) * 100}%` }} className="bg-amber-500 h-full" />}
-                              {item.left > 0 && <div style={{ width: `${(item.left / item.total) * 100}%` }} className="bg-rose-500 h-full" />}
-                              {item.graduated > 0 && <div style={{ width: `${(item.graduated / item.total) * 100}%` }} className="bg-blue-500 h-full" />}
-                            </div>
-
-                            <div className="flex flex-wrap gap-1.5 text-[11px] font-bold">
-                              {item.active > 0 && (
-                                <span className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-lg border border-emerald-200/80 dark:border-emerald-800 whitespace-nowrap inline-flex items-center gap-1">
-                                  <span>مستمر: {item.active}</span>
-                                  <span dir="ltr" className="opacity-80">({pctActive}%)</span>
-                                </span>
-                              )}
-                              {item.transferred > 0 && (
-                                <span className="bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-lg border border-amber-200/80 dark:border-amber-800 whitespace-nowrap inline-flex items-center gap-1">
-                                  <span>منقول: {item.transferred}</span>
-                                  <span dir="ltr" className="opacity-80">({pctTransferred}%)</span>
-                                </span>
-                              )}
-                              {item.left > 0 && (
-                                <span className="bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 px-2 py-0.5 rounded-lg border border-rose-200/80 dark:border-rose-800 whitespace-nowrap inline-flex items-center gap-1">
-                                  <span>تارك: {item.left}</span>
-                                  <span dir="ltr" className="opacity-80">({pctLeft}%)</span>
-                                </span>
-                              )}
-                              {item.graduated > 0 && (
-                                <span className="bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-lg border border-blue-200/80 dark:border-blue-800 whitespace-nowrap inline-flex items-center gap-1">
-                                  <span>متخرج: {item.graduated}</span>
-                                  <span dir="ltr" className="opacity-80">({pctGraduated}%)</span>
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      }) : (
-                        <div className="p-6 text-center text-slate-400 font-bold text-xs bg-slate-50 rounded-2xl">لا توجد بيانات متاحة</div>
-                      )}
-                    </div>
-
-                    {/* Desktop Table (>= md) */}
-                    <div className="hidden md:block overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
-                      <table className="w-full text-right border-collapse text-xs">
-                        <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold">
-                          <tr>
-                            <th className="p-3 w-28">رقم القيد</th>
-                            <th className="p-3 w-28 text-center">إجمالي الطلاب</th>
-                            <th className="p-3 w-40">نسبة التوزيع</th>
-                            <th className="p-3">تفصيل الحالات</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                          {regStats.length > 0 ? regStats.map((item) => (
-                            <tr
-                              key={item.reg}
-                              onClick={() => { setSelectedRegFilter(item.reg); setView('list'); }}
-                              className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
-                            >
-                              <td className="p-3 font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">
-                                <span className={`${currentTheme.primary} text-white px-2.5 py-0.5 rounded-lg font-mono text-xs font-bold whitespace-nowrap inline-block`}>
-                                  قيد {item.reg}
-                                </span>
-                              </td>
-                              <td className="p-3 font-black text-slate-900 dark:text-slate-100 text-center font-mono whitespace-nowrap">
-                                {item.total} طالب
-                              </td>
-                              <td className="p-3">
-                                <div className="w-full h-2.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden flex">
-                                  {item.active > 0 && <div style={{ width: `${(item.active / item.total) * 100}%` }} className="bg-emerald-500 h-full" title={`مستمر: ${item.active}`} />}
-                                  {item.transferred > 0 && <div style={{ width: `${(item.transferred / item.total) * 100}%` }} className="bg-amber-500 h-full" title={`منقول: ${item.transferred}`} />}
-                                  {item.left > 0 && <div style={{ width: `${(item.left / item.total) * 100}%` }} className="bg-rose-500 h-full" title={`تارك: ${item.left}`} />}
-                                  {item.graduated > 0 && <div style={{ width: `${(item.graduated / item.total) * 100}%` }} className="bg-blue-500 h-full" title={`متخرج: ${item.graduated}`} />}
-                                </div>
-                              </td>
-                              <td className="p-3">
-                                <div className="flex flex-wrap gap-1.5 text-[11px] font-bold">
-                                  {item.active > 0 && (
-                                    <span className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800 whitespace-nowrap inline-flex items-center gap-1">
-                                      <span>مستمر: {item.active}</span>
-                                      <span dir="ltr">({item.total > 0 ? Math.round((item.active / item.total) * 100) : 0}%)</span>
-                                    </span>
-                                  )}
-                                  {item.transferred > 0 && (
-                                    <span className="bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800 whitespace-nowrap inline-flex items-center gap-1">
-                                      <span>منقول: {item.transferred}</span>
-                                      <span dir="ltr">({item.total > 0 ? Math.round((item.transferred / item.total) * 100) : 0}%)</span>
-                                    </span>
-                                  )}
-                                  {item.left > 0 && (
-                                    <span className="bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 px-2 py-0.5 rounded-lg border border-rose-200 dark:border-rose-800 whitespace-nowrap inline-flex items-center gap-1">
-                                      <span>تارك: {item.left}</span>
-                                      <span dir="ltr">({item.total > 0 ? Math.round((item.left / item.total) * 100) : 0}%)</span>
-                                    </span>
-                                  )}
-                                  {item.graduated > 0 && (
-                                    <span className="bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-lg border border-blue-200 dark:border-blue-800 whitespace-nowrap inline-flex items-center gap-1">
-                                      <span>متخرج: {item.graduated}</span>
-                                      <span dir="ltr">({item.total > 0 ? Math.round((item.graduated / item.total) * 100) : 0}%)</span>
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          )) : (
-                            <tr>
-                              <td colSpan={4} className="p-4 text-center text-slate-400 font-bold">لا توجد بيانات متاحة</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <button 
-                  type="button"
-                  onClick={() => setView('list')} 
-                  className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold rounded-xl text-slate-700 dark:text-slate-200 text-xs transition-colors cursor-pointer shrink-0"
-                >
-                  إغلاق الإحصائيات
-                </button>
-              </div>
-            </Modal>
-          );
-        })()}
+              }
+            >
+              <StatsModalContent
+                students={students}
+                currentTheme={currentTheme}
+                onClose={() => setView('list')}
+                onSelectReg={(reg) => {
+                  setSelectedRegFilter(reg);
+                  setView('list');
+                }}
+              />
+            </Suspense>
+          </Modal>
+        )}
 
         {/* Print Template Customization Modal */}
         {showPrintTemplateModal && (
@@ -6391,7 +6202,7 @@ export default function App() {
             const statusColors: Record<string, string> = { 'active': 'bg-emerald-100 text-emerald-700', 'transferred': 'bg-amber-100 text-amber-700', 'left': 'bg-rose-100 text-rose-700', 'graduated': 'bg-blue-100 text-blue-700' };
 
             return (
-              <Modal onClose={() => { setView('list'); setSimilarStudents([]); }}>
+              <Modal onClose={() => { setView('list'); }}>
                  <div className="bg-white rounded-3xl shadow-2xl pt-8 px-5 pb-5 md:p-6 space-y-5 animate-slide-up relative overflow-hidden">
                      <div className="absolute top-0 right-0 w-24 h-24 bg-slate-50 rounded-full -mr-8 -mt-8"></div>
     
@@ -6556,7 +6367,6 @@ export default function App() {
                               setCustomDocPurpose('');
                             }
                             setView('edit'); 
-                            setSimilarStudents([]); 
                           }} 
                           className="flex-1 bg-slate-100 py-2.5 rounded-xl font-bold hover:bg-slate-200 text-slate-700 transition-colors text-sm"
                         >
@@ -6572,7 +6382,6 @@ export default function App() {
                               setConfirmConfig(null); 
                               setSelectedId(null); 
                               setAlertConfig({ message: 'تم نقل الطالب إلى سلة المحذوفات', type: 'success' }); 
-                              await refreshStats(); 
                             } 
                           })} 
                           className="flex-1 bg-red-50 text-red-600 py-2.5 rounded-xl font-bold hover:bg-red-100 transition-colors text-sm"

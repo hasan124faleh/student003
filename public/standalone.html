@@ -368,7 +368,7 @@
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        import React, { useState, useEffect, useMemo, useRef } from 'react';
+        import React, { useState, useEffect, useMemo, useRef, useCallback, startTransition } from 'react';
         import ReactDOM from 'react-dom/client';
         import { 
           Users, LogOut, Settings, Search, Plus, Printer, 
@@ -1268,6 +1268,135 @@
           amber: { primary: 'bg-amber-900', hover: 'hover:bg-amber-800', secondary: 'bg-orange-600', secondaryHover: 'hover:bg-orange-700', ring: 'focus:ring-orange-500', name: 'برتقالي' },
         };
         
+        const MAX_SIMILAR_DISPLAY = 15;
+
+        const FirstNameSimilarField = React.memo(({
+          students,
+          selectedId,
+          defaultValue,
+          ringClass,
+          resetSignal,
+          onVoiceInput,
+        }) => {
+          const inputRef = useRef(null);
+          const debounceTimerRef = useRef(null);
+          const [similarState, setSimilarState] = useState({ items: [], total: 0 });
+
+          useEffect(() => {
+            if (inputRef.current && inputRef.current.value !== defaultValue) {
+              inputRef.current.value = defaultValue;
+            }
+            setSimilarState(prev => (prev.total === 0 ? prev : { items: [], total: 0 }));
+          }, [defaultValue, selectedId, resetSignal]);
+
+          useEffect(() => {
+            return () => {
+              if (debounceTimerRef.current !== null) {
+                window.clearTimeout(debounceTimerRef.current);
+              }
+            };
+          }, []);
+
+          const runSimilarityCheck = useCallback((rawValue) => {
+            const name = rawValue.trim();
+            if (name.length < 2) {
+              setSimilarState(prev => (prev.total === 0 ? prev : { items: [], total: 0 }));
+              return;
+            }
+
+            const matches = [];
+            let total = 0;
+            for (let i = 0; i < students.length; i++) {
+              const s = students[i];
+              if (!s.isDeleted && s.id !== selectedId && s.firstName && s.firstName.includes(name)) {
+                total++;
+                if (matches.length < MAX_SIMILAR_DISPLAY) {
+                  matches.push(s);
+                }
+              }
+            }
+
+            startTransition(() => {
+              if (total === 0) {
+                setSimilarState(prev => (prev.total === 0 ? prev : { items: [], total: 0 }));
+              } else {
+                setSimilarState({ items: matches, total });
+              }
+            });
+          }, [students, selectedId]);
+
+          const scheduleCheck = useCallback((val) => {
+            if (debounceTimerRef.current !== null) {
+              window.clearTimeout(debounceTimerRef.current);
+              debounceTimerRef.current = null;
+            }
+            if (val.trim().length < 2) {
+              setSimilarState(prev => (prev.total === 0 ? prev : { items: [], total: 0 }));
+              return;
+            }
+            debounceTimerRef.current = window.setTimeout(() => {
+              debounceTimerRef.current = null;
+              runSimilarityCheck(val);
+            }, 150);
+          }, [runSimilarityCheck]);
+
+          return (
+            <div>
+              <div className="relative">
+                <input
+                  ref={inputRef}
+                  name="firstName"
+                  required
+                  defaultValue={defaultValue}
+                  className={`w-full p-2.5 rounded-xl bg-slate-50 outline-none border ${ringClass} font-bold text-sm`}
+                  placeholder="الاسم الرباعي"
+                  onChange={(e) => scheduleCheck(e.target.value)}
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  onClick={() => onVoiceInput((val) => {
+                    if (inputRef.current) {
+                      inputRef.current.value = val;
+                    }
+                    runSimilarityCheck(val);
+                  })}
+                  className="absolute left-2 top-1/2 transform -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 transition-colors"
+                  data-tooltip="إدخال صوتي"
+                >
+                  <Mic size={18} />
+                </button>
+              </div>
+              {similarState.items.length > 0 && (
+                <div className="mt-2 bg-amber-50 border border-amber-200 rounded-xl p-2 animate-fade-in">
+                  <div className="flex items-center justify-between gap-1 text-amber-800 font-bold text-[10px] mb-1">
+                    <span className="flex items-center gap-1">
+                      <AlertTriangle size={12}/>
+                      <span>تنبيه: توجد أسماء مشابهة مسجلة مسبقاً</span>
+                    </span>
+                    {similarState.total > similarState.items.length && (
+                      <span className="text-[9px] text-amber-700">
+                        أول {similarState.items.length} من {similarState.total}
+                      </span>
+                    )}
+                  </div>
+                  <div className="max-h-24 overflow-y-auto space-y-1">
+                    {similarState.items.map(s => (
+                      <div key={s.id} className="flex justify-between items-center bg-white p-1.5 rounded-lg border border-amber-100 text-[10px]">
+                        <span className="font-bold text-slate-700 truncate ml-1">{cleanName(s.firstName)} {s.lastName || ''}</span>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <span className="bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded font-mono font-bold">صفحة {s.pageNumber}</span>
+                          <span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-mono font-bold">قيد {s.regNumber}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        });
+
         const App = () => {
           const [user, setUser] = useState(null);
           const [loading, setLoading] = useState(true);
@@ -1295,7 +1424,7 @@
           const [alertConfig, setAlertConfig] = useState(null);
           const [confirmConfig, setConfirmConfig] = useState(null);
           const [showScrollTop, setShowScrollTop] = useState(false);
-          const [similarStudents, setSimilarStudents] = useState([]);
+          const [formResetCount, setFormResetCount] = useState(0);
           const [colorTheme, setColorTheme] = useState(localStorage.getItem('appTheme') || 'slate');
           const [isDarkMode, setIsDarkMode] = useState(localStorage.getItem('darkMode') === 'true');
           const [showThemeModal, setShowThemeModal] = useState(false);
@@ -1379,7 +1508,6 @@
                 e.preventDefault();
                 setSelectedId(null);
                 setView('add');
-                setSimilarStudents([]);
               }
               if (e.key === 'Escape') {
                 setShowPrintModal(false);
@@ -1773,21 +1901,7 @@
             });
           };
 
-          const checkSimilarStudents = (val) => {
-            const name = val.trim();
-            if (name.length < 2) {
-                setSimilarStudents([]);
-                return;
-            }
-            const matches = students.filter(s => 
-                !s.isDeleted && 
-                s.id !== selectedId &&
-                s.firstName.includes(name)
-            );
-            setSimilarStudents(matches);
-          };
-
-          const startVoiceInput = (fieldName, setter) => {
+          const startVoiceInput = useCallback((fieldName, setter) => {
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
               setAlertConfig({ message: 'متصفحك لا يدعم الإدخال الصوتي', type: 'error' });
               return;
@@ -1819,7 +1933,18 @@
             };
             
             recognition.start();
-          };
+          }, []);
+
+          const handleFirstNameVoiceInput = useCallback((setter) => {
+            startVoiceInput('firstName', setter);
+          }, [startVoiceInput]);
+
+          const regNumberOptions = useMemo(() => {
+            return Array.from(new Set([
+              ...students.filter(s => !s.isDeleted).map(s => s.regNumber),
+              ...customRegs
+            ])).sort((a, b) => Number(a) - Number(b));
+          }, [students, customRegs]);
 
           const shareViaWhatsApp = (studentsToShare) => {
             const statusMap = { 'active': 'مستمر', 'transferred': 'منقول', 'left': 'تارك', 'graduated': 'متخرج' };
@@ -2183,7 +2308,7 @@
                           {/* Action Buttons */}
                           <div className={`${inSearchMode ? 'hidden' : 'flex'} flex-wrap gap-2`}>
                                 <button 
-                                  onClick={() => { setSelectedId(null); setView('add'); setSimilarStudents([]); }} 
+                                  onClick={() => { setSelectedId(null); setView('add'); }} 
                                   data-tooltip="إضافة طالب جديد (Ctrl+N)"
                                   className={`flex-1 min-w-[120px] ${currentTheme.primary} ${currentTheme.hover} text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-lg transition-colors`}
                                 >
@@ -2563,7 +2688,7 @@
 
                 {/* Add/Edit Modal (SWAPPED: Page input before Reg input) */}
                 {(view === 'add' || view === 'edit') && (
-                    <Modal onClose={() => { setView('list'); setSimilarStudents([]); setEditFormData(null); setSavedStudentName(null); setFormTransferGrade(''); }}>
+                    <Modal onClose={() => { setView('list'); setEditFormData(null); setSavedStudentName(null); setFormTransferGrade(''); }}>
                       <div className="bg-white rounded-2xl shadow-2xl p-5 space-y-4 max-h-[80vh] overflow-y-auto">
                         <h2 className="text-lg font-bold">{view === 'add' ? 'إضافة طالب جديد' : 'تعديل بيانات الطالب'}</h2>
                         
@@ -2634,7 +2759,6 @@
                                     setSavedStudentName({ name: `${cleanName(fName)} ${lName || ''}`.trim(), page: pageNum, reg: regNum });
                                     setAlertConfig({ message: 'تم تعديل البيانات بنجاح', type: 'success' });
                                     setView('list');
-                                    setSimilarStudents([]);
                                     setEditFormData(null);
                                 } else {
                                     await addDoc(studentsCollection, data);
@@ -2644,7 +2768,7 @@
                                     setFormStatus('active');
                                     setDocPurposeType('إكمال الدراسة');
                                     setCustomDocPurpose('');
-                                    setSimilarStudents([]);
+                                    setFormResetCount(c => c + 1);
                                 }
                                 await refreshStats();
                             } catch(err) { 
@@ -2652,51 +2776,14 @@
                                 setAlertConfig({ message: "حدث خطأ أثناء الحفظ", type: 'error' }); 
                             }
                         }} className="space-y-3">
-                           <div>
-                               <div className="relative">
-                                 <input 
-                                   name="firstName" 
-                                   required 
-                                   defaultValue={editFormData?.firstName || ''} 
-                                   className={`w-full p-2.5 rounded-xl bg-slate-50 outline-none border ${currentTheme.ring} font-bold text-sm`} 
-                                   placeholder="الاسم الرباعي" 
-                                   onChange={(e) => checkSimilarStudents(e.target.value)} 
-                                   autoComplete="off"
-                                 />
-                                 <button
-                                   type="button"
-                                   onClick={() => startVoiceInput('firstName', (val) => {
-                                     const input = document.querySelector('input[name="firstName"]');
-                                     if (input) input.value = val;
-                                     checkSimilarStudents(val);
-                                   })}
-                                   className="absolute left-2 top-1/2 transform -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 transition-colors"
-                                   data-tooltip="إدخال صوتي"
-                                 >
-                                   <Mic size={18} />
-                                 </button>
-                               </div>
-                               {similarStudents.length > 0 && (
-                                   <div className="mt-2 bg-amber-50 border border-amber-200 rounded-xl p-2 animate-fade-in">
-                                       <div className="flex items-center gap-1 text-amber-800 font-bold text-[10px] mb-1">
-                                            <AlertTriangle size={12}/>
-                                           <span>تنبيه: توجد أسماء مشابهة مسجلة مسبقاً</span>
-                                       </div>
-                                       <div className="max-h-24 overflow-y-auto space-y-1">
-                                           {similarStudents.map(s => (
-                                               <div key={s.id} className="flex justify-between items-center bg-white p-1.5 rounded-lg border border-amber-100 text-[10px]">
-                                                   <span className="font-bold text-slate-700 truncate ml-1">{cleanName(s.firstName)} {s.lastName || ''}</span>
-                                                   <div className="flex gap-1 flex-shrink-0">
-                                                       {/* SWAPPED: صفحة then قيد */}
-                                                       <span className="bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded font-mono font-bold">صفحة {s.pageNumber}</span>
-                                                       <span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-mono font-bold">قيد {s.regNumber}</span>
-                                                   </div>
-                                               </div>
-                                           ))}
-                                       </div>
-                                   </div>
-                               )}
-                           </div>
+                           <FirstNameSimilarField
+                             students={students}
+                             selectedId={selectedId}
+                             defaultValue={editFormData?.firstName || ''}
+                             ringClass={currentTheme.ring}
+                             resetSignal={formResetCount}
+                             onVoiceInput={handleFirstNameVoiceInput}
+                           />
                            <div className="relative">
                              <input name="lastName" defaultValue={editFormData?.lastName || ''} className={`w-full p-2.5 rounded-xl bg-slate-50 outline-none border ${currentTheme.ring} font-bold text-sm`} placeholder="العائلة (اختياري)" />
                              <button
@@ -2731,10 +2818,7 @@
                                    placeholder="أدخل رقم القيد"
                                  />
                                  <datalist id="regNumbersList">
-                                   {Array.from(new Set([
-                                     ...students.filter(s => !s.isDeleted).map(s => s.regNumber),
-                                     ...customRegs
-                                   ])).sort((a, b) => Number(a) - Number(b)).map(r => (
+                                   {regNumberOptions.map(r => (
                                      <option key={r} value={r}>قيد {r}</option>
                                    ))}
                                  </datalist>
@@ -2911,7 +2995,7 @@
                                <Save size={16}/> حفظ البيانات
                              </button>
                              {view === 'add' && (
-                               <button type="button" onClick={() => { setView('list'); setSimilarStudents([]); setSavedStudentName(null); }} className="px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">
+                               <button type="button" onClick={() => { setView('list'); setSavedStudentName(null); }} className="px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">
                                  إغلاق
                                </button>
                              )}
@@ -3528,7 +3612,7 @@
                     const statusColors = { 'active': 'bg-emerald-100 text-emerald-700', 'transferred': 'bg-amber-100 text-amber-700', 'left': 'bg-rose-100 text-rose-700', 'graduated': 'bg-blue-100 text-blue-700' };
 
                     return (
-                      <Modal onClose={() => { setView('list'); setSimilarStudents([]); }}>
+                      <Modal onClose={() => { setView('list'); }}>
                          <div className="bg-white rounded-3xl shadow-2xl p-5 md:p-6 space-y-6 animate-slide-up relative overflow-hidden">
                              <div className="absolute top-0 right-0 w-24 h-24 bg-slate-50 rounded-full -mr-8 -mt-8"></div>
             
@@ -3655,7 +3739,6 @@
                                       setCustomDocPurpose('');
                                     }
                                     setView('edit'); 
-                                    setSimilarStudents([]); 
                                   }} 
                                   className="flex-1 bg-slate-100 py-2.5 rounded-xl font-bold hover:bg-slate-200 text-slate-700 transition-colors text-sm"
                                 >
