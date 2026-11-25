@@ -278,29 +278,374 @@ const formatDateForInput = (timestamp?: number) => {
     return new Date(timestamp).toISOString().split('T')[0];
 };
 
-const exportToExcel = async (students: Student[]) => {
-  const XLSX = await import('xlsx');
-  const statusMap: Record<string, string> = { 'active': 'مستمر', 'transferred': 'منقول', 'left': 'تارك', 'graduated': 'متخرج' };
-  const data = students.map(s => ({
-    'الاسم الرباعي': cleanName(s.firstName),
-    'العائلة': s.lastName || '',
-    'رقم الصفحة': s.pageNumber,
-    'رقم القيد': s.regNumber,
-    'الحالة الدراسية': statusMap[s.status || 'active'] || 'مستمر',
-    'تاريخ الوثيقة': s.docDate || '',
-    'الصف الذي انتقل فيه': s.transferGrade || '',
-    'الجهة الصادرة إليها': s.docDestination || '',
-    'الغرض من الوثيقة': s.docPurpose || '',
-    'العام الدراسي للتخرج': s.graduationYear || '',
-    'دور التخرج': s.graduationRound || '',
-    'صف / فرع التخرج': s.graduationGrade || '',
-    'ملاحظات': s.notes || '',
-    'تاريخ التسجيل': new Date(s.createdAt).toLocaleDateString('ar-EG')
-  }));
-  const worksheet = XLSX.utils.json_to_sheet(data);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "الطلاب");
-  XLSX.writeFile(workbook, "سجل_القيود_العام.xlsx");
+const loadExcelJS = async () => {
+  const mod: any = await import('exceljs');
+  return mod?.default?.Workbook ? mod.default : mod?.Workbook ? mod : (globalThis as any).ExcelJS;
+};
+
+const downloadWorkbook = async (workbook: any, fileName: string) => {
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
+const exportToExcel = async (
+  studentsList: Student[],
+  options?: { fileName?: string; sheetName?: string; title?: string; accent?: 'emerald' | 'blue' }
+) => {
+  const ExcelJS = await loadExcelJS();
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'سجل القيد العام';
+  workbook.created = new Date();
+
+  const rawSheetName = (options?.sheetName || 'سجل القيود العام').replace(/[\\/*?:[\]]/g, '').slice(0, 31) || 'الطلاب';
+  const accent = options?.accent || 'emerald';
+  const bannerBg = accent === 'blue' ? 'FF1E3A8A' : 'FF065F46';
+  const subBg = accent === 'blue' ? 'FFEFF6FF' : 'FFECFDF5';
+  const subText = accent === 'blue' ? 'FF1E40AF' : 'FF065F46';
+  const mainGroupBg = accent === 'blue' ? 'FF1D4ED8' : 'FF047857';
+  const mainTintEven = accent === 'blue' ? 'FFF8FAFC' : 'FFFFFFFF';
+  const mainTintOdd = accent === 'blue' ? 'FFEFF6FF' : 'FFF0FDF4';
+
+  const columns = [
+    { key: 'serial', label: 'ت', width: 7, align: 'center' as const, headerBg: mainGroupBg, group: 'main' },
+    { key: 'firstName', label: 'الاسم الرباعي', width: 30, align: 'right' as const, headerBg: mainGroupBg, group: 'main', bold: true },
+    { key: 'lastName', label: 'العائلة', width: 16, align: 'right' as const, headerBg: mainGroupBg, group: 'main' },
+    { key: 'regNumber', label: 'رقم القيد', width: 12, align: 'center' as const, headerBg: mainGroupBg, group: 'main', bold: true },
+    { key: 'pageNumber', label: 'رقم الصفحة', width: 12, align: 'center' as const, headerBg: mainGroupBg, group: 'main', bold: true },
+    { key: 'status', label: 'الحالة الدراسية', width: 15, align: 'center' as const, headerBg: mainGroupBg, group: 'status', groupEnd: true },
+    { key: 'docDate', label: 'تاريخ الوثيقة', width: 15, align: 'center' as const, headerBg: 'FFB45309', group: 'docs' },
+    { key: 'transferGrade', label: 'الصف الذي انتقل فيه', width: 20, align: 'center' as const, headerBg: 'FFB45309', group: 'docs' },
+    { key: 'docDestination', label: 'الجهة الصادرة إليها', width: 28, align: 'right' as const, headerBg: 'FFB45309', group: 'docs' },
+    { key: 'docPurpose', label: 'الغرض من الوثيقة', width: 19, align: 'center' as const, headerBg: 'FFB45309', group: 'docs', groupEnd: true },
+    { key: 'graduationYear', label: 'العام الدراسي للتخرج', width: 18, align: 'center' as const, headerBg: 'FF4338CA', group: 'grad' },
+    { key: 'graduationRound', label: 'دور التخرج', width: 13, align: 'center' as const, headerBg: 'FF4338CA', group: 'grad' },
+    { key: 'graduationGrade', label: 'صف / فرع التخرج', width: 20, align: 'center' as const, headerBg: 'FF4338CA', group: 'grad', groupEnd: true },
+    { key: 'notes', label: 'ملاحظات', width: 26, align: 'right' as const, headerBg: 'FF334155', group: 'meta' },
+    { key: 'createdAt', label: 'تاريخ التسجيل', width: 15, align: 'center' as const, headerBg: 'FF334155', group: 'meta' },
+  ];
+
+  const worksheet = workbook.addWorksheet(rawSheetName, {
+    views: [{ rightToLeft: true, state: 'frozen', ySplit: 3 }],
+    pageSetup: {
+      orientation: 'landscape',
+      paperSize: 9,
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      horizontalCentered: true,
+    },
+  });
+
+  worksheet.columns = columns.map(c => ({ key: c.key, width: c.width }));
+
+  // Row 1: Title Banner
+  worksheet.mergeCells(1, 1, 1, columns.length);
+  const titleCell = worksheet.getCell(1, 1);
+  const titleText = options?.title || 'سجل القيد العام';
+  titleCell.value = `${titleText} — ث. ش. محمد عبدالعزيز الكنعان للبنين`;
+  titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bannerBg } };
+  titleCell.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle', readingOrder: 'rtl' };
+  worksheet.getRow(1).height = 34;
+
+  // Row 2: Metadata Subtitle
+  worksheet.mergeCells(2, 1, 2, columns.length);
+  const subCell = worksheet.getCell(2, 1);
+  subCell.value = `تاريخ التصدير: ${new Date().toLocaleDateString('ar-EG')}   |   عدد السجلات: ${studentsList.length}`;
+  subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: subBg } };
+  subCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: subText } };
+  subCell.alignment = { horizontal: 'center', vertical: 'middle', readingOrder: 'rtl' };
+  subCell.border = { bottom: { style: 'medium', color: { argb: 'FF94A3B8' } } };
+  worksheet.getRow(2).height = 22;
+
+  // Row 3: Column Headers
+  const headerRow = worksheet.getRow(3);
+  headerRow.height = 30;
+  columns.forEach((col, idx) => {
+    const cell = headerRow.getCell(idx + 1);
+    cell.value = col.label;
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: col.headerBg } };
+    cell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true, readingOrder: 'rtl' };
+    cell.border = {
+      top: { style: 'medium', color: { argb: 'FF1E293B' } },
+      bottom: { style: 'medium', color: { argb: 'FF1E293B' } },
+      right: { style: 'thin', color: { argb: 'FFFFFFFF' } },
+      left: { style: col.groupEnd ? 'medium' : 'thin', color: { argb: col.groupEnd ? 'FF0F172A' : 'FFFFFFFF' } },
+    };
+  });
+
+  const statusMap: Record<string, string> = {
+    active: 'مستمر',
+    transferred: 'منقول',
+    left: 'تارك',
+    graduated: 'متخرج',
+  };
+  const statusStyles: Record<string, { bg: string; text: string }> = {
+    active: { bg: 'FFDCFCE7', text: 'FF166534' },
+    transferred: { bg: 'FFFEF3C7', text: 'FF92400E' },
+    left: { bg: 'FFFFE4E6', text: 'FF9F1239' },
+    graduated: { bg: 'FFDBEAFE', text: 'FF1E40AF' },
+  };
+
+  studentsList.forEach((s, rowIndex) => {
+    const statusKey = s.status || 'active';
+    const isEven = rowIndex % 2 === 0;
+    const rowValues: Record<string, string | number> = {
+      serial: rowIndex + 1,
+      firstName: cleanName(s.firstName),
+      lastName: s.lastName || '',
+      regNumber: s.regNumber || '',
+      pageNumber: s.pageNumber || '',
+      status: statusMap[statusKey] || 'مستمر',
+      docDate: s.docDate || '',
+      transferGrade: s.transferGrade || '',
+      docDestination: s.docDestination || '',
+      docPurpose: s.docPurpose || '',
+      graduationYear: s.graduationYear || '',
+      graduationRound: s.graduationRound || '',
+      graduationGrade: s.graduationGrade || '',
+      notes: s.notes || '',
+      createdAt: new Date(s.createdAt).toLocaleDateString('ar-EG'),
+    };
+
+    const row = worksheet.getRow(rowIndex + 4);
+    row.height = 24;
+
+    columns.forEach((col, colIndex) => {
+      const cell = row.getCell(colIndex + 1);
+      cell.value = rowValues[col.key];
+
+      let bgArgb = isEven ? mainTintEven : mainTintOdd;
+      let textArgb = 'FF0F172A';
+      let isBold = Boolean(col.bold);
+
+      if (col.key === 'serial') {
+        bgArgb = isEven ? 'FFF1F5F9' : 'FFE2E8F0';
+        isBold = true;
+      } else if (col.group === 'status') {
+        const st = statusStyles[statusKey] || statusStyles.active;
+        bgArgb = st.bg;
+        textArgb = st.text;
+        isBold = true;
+      } else if (col.group === 'docs') {
+        bgArgb = isEven ? 'FFFFFBEB' : 'FFFEF3C7';
+      } else if (col.group === 'grad') {
+        bgArgb = isEven ? 'FFF5F3FF' : 'FFEDE9FE';
+      } else if (col.group === 'meta') {
+        bgArgb = isEven ? 'FFFFFFFF' : 'FFF8FAFC';
+      }
+
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgArgb } };
+      cell.font = { name: 'Arial', size: 10.5, bold: isBold, color: { argb: textArgb } };
+      cell.alignment = {
+        horizontal: col.align,
+        vertical: 'middle',
+        wrapText: true,
+        readingOrder: 'rtl',
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        left: { style: col.groupEnd ? 'medium' : 'thin', color: { argb: col.groupEnd ? 'FF64748B' : 'FFCBD5E1' } },
+      };
+    });
+  });
+
+  worksheet.autoFilter = {
+    from: { row: 3, column: 1 },
+    to: { row: 3, column: columns.length },
+  };
+
+  await downloadWorkbook(workbook, options?.fileName || 'سجل_القيود_العام.xlsx');
+};
+
+const exportDocsToExcel = async (
+  studentsList: Student[],
+  selectedYear: string,
+  sortBy: 'byDate' | 'alphabetical' | 'byGradeAlpha' = 'byDate'
+) => {
+  let list = studentsList.filter(s => !s.isDeleted && (s.status === 'transferred' || !!s.docDestination || !!s.docDate));
+  if (selectedYear !== 'ALL') {
+    list = list.filter(s => {
+      const yearFromDoc = s.docDate ? s.docDate.substring(0, 4) : '';
+      const yearFromCreated = new Date(s.createdAt).getFullYear().toString();
+      return yearFromDoc === selectedYear || (!yearFromDoc && yearFromCreated === selectedYear);
+    });
+  }
+
+  if (list.length === 0) return 0;
+
+  const gradeOrder: Record<string, number> = {
+    'الأول متوسط': 1,
+    'الثاني متوسط': 2,
+    'الثالث متوسط': 3,
+    'الرابع علمي': 4,
+    'الخامس علمي': 5,
+    'السادس علمي': 6,
+    'الرابع أدبي': 7,
+    'الخامس أدبي': 8,
+    'السادس أدبي': 9,
+  };
+
+  list = [...list].sort((a, b) => {
+    if (sortBy === 'byDate') {
+      const dateA = a.docDate || new Date(a.createdAt).toISOString().split('T')[0];
+      const dateB = b.docDate || new Date(b.createdAt).toISOString().split('T')[0];
+      const comp = dateA.localeCompare(dateB);
+      if (comp !== 0) return comp;
+      return cleanName(a.firstName).localeCompare(cleanName(b.firstName), 'ar');
+    } else if (sortBy === 'alphabetical') {
+      return cleanName(a.firstName).localeCompare(cleanName(b.firstName), 'ar');
+    } else if (sortBy === 'byGradeAlpha') {
+      const orderA = gradeOrder[a.transferGrade || ''] || 99;
+      const orderB = gradeOrder[b.transferGrade || ''] || 99;
+      if (orderA !== orderB) return orderA - orderB;
+      const compGrade = (a.transferGrade || '').localeCompare(b.transferGrade || '', 'ar');
+      if (compGrade !== 0) return compGrade;
+      return cleanName(a.firstName).localeCompare(cleanName(b.firstName), 'ar');
+    }
+    return 0;
+  });
+
+  const ExcelJS = await loadExcelJS();
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'سجل صادر الوثائق';
+  workbook.created = new Date();
+
+  const columns = [
+    { key: 'serial', label: 'ت', width: 7, align: 'center' as const, headerBg: 'FF92400E', group: 'date', bold: true },
+    { key: 'docDate', label: 'تاريخ الوثيقة', width: 15, align: 'center' as const, headerBg: 'FF92400E', group: 'date', bold: true, groupEnd: true },
+    { key: 'firstName', label: 'اسم الطالب الرباعي', width: 32, align: 'right' as const, headerBg: 'FF1E40AF', group: 'student', bold: true },
+    { key: 'regNumber', label: 'رقم القيد', width: 12, align: 'center' as const, headerBg: 'FF1E40AF', group: 'student' },
+    { key: 'pageNumber', label: 'رقم الصفحة', width: 12, align: 'center' as const, headerBg: 'FF1E40AF', group: 'student', groupEnd: true },
+    { key: 'docDestination', label: 'الجهة الصادر إليها', width: 30, align: 'right' as const, headerBg: 'FF0F766E', group: 'dest', bold: true },
+    { key: 'docPurpose', label: 'الغرض من الوثيقة', width: 20, align: 'center' as const, headerBg: 'FF0F766E', group: 'dest' },
+    { key: 'transferGrade', label: 'الصف الذي انتقل فيه', width: 20, align: 'center' as const, headerBg: 'FF0F766E', group: 'dest', groupEnd: true },
+    { key: 'notes', label: 'الملاحظات', width: 26, align: 'right' as const, headerBg: 'FF334155', group: 'notes' },
+  ];
+
+  const worksheet = workbook.addWorksheet('صادر الوثائق', {
+    views: [{ rightToLeft: true, state: 'frozen', ySplit: 3 }],
+    pageSetup: {
+      orientation: 'landscape',
+      paperSize: 9,
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      horizontalCentered: true,
+    },
+  });
+
+  worksheet.columns = columns.map(c => ({ key: c.key, width: c.width }));
+
+  // Row 1: Title Banner
+  worksheet.mergeCells(1, 1, 1, columns.length);
+  const titleCell = worksheet.getCell(1, 1);
+  const yearLabel = selectedYear && selectedYear !== 'ALL' ? `لسنة ${selectedYear}` : '(جميع السنوات)';
+  titleCell.value = `سجل صادر الوثائق ${yearLabel} — ث. ش. محمد عبدالعزيز الكنعان للبنين`;
+  titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF92400E' } };
+  titleCell.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle', readingOrder: 'rtl' };
+  worksheet.getRow(1).height = 34;
+
+  // Row 2: Subtitle Info
+  worksheet.mergeCells(2, 1, 2, columns.length);
+  const subCell = worksheet.getCell(2, 1);
+  subCell.value = `تاريخ التصدير: ${new Date().toLocaleDateString('ar-EG')}   |   عدد الوثائق الصادرة: ${list.length}`;
+  subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+  subCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF78350F' } };
+  subCell.alignment = { horizontal: 'center', vertical: 'middle', readingOrder: 'rtl' };
+  subCell.border = { bottom: { style: 'medium', color: { argb: 'FFD97706' } } };
+  worksheet.getRow(2).height = 22;
+
+  // Row 3: Column Headers
+  const headerRow = worksheet.getRow(3);
+  headerRow.height = 30;
+  columns.forEach((col, idx) => {
+    const cell = headerRow.getCell(idx + 1);
+    cell.value = col.label;
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: col.headerBg } };
+    cell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true, readingOrder: 'rtl' };
+    cell.border = {
+      top: { style: 'medium', color: { argb: 'FF1E293B' } },
+      bottom: { style: 'medium', color: { argb: 'FF1E293B' } },
+      right: { style: 'thin', color: { argb: 'FFFFFFFF' } },
+      left: { style: col.groupEnd ? 'medium' : 'thin', color: { argb: col.groupEnd ? 'FF0F172A' : 'FFFFFFFF' } },
+    };
+  });
+
+  list.forEach((s, rowIndex) => {
+    const isEven = rowIndex % 2 === 0;
+    const rowValues: Record<string, string | number> = {
+      serial: rowIndex + 1,
+      docDate: s.docDate || '',
+      firstName: cleanName(s.firstName),
+      regNumber: s.regNumber || '',
+      pageNumber: s.pageNumber || '',
+      docDestination: s.docDestination || '',
+      docPurpose: s.docPurpose || '',
+      transferGrade: s.transferGrade || '',
+      notes: s.notes || '',
+    };
+
+    const row = worksheet.getRow(rowIndex + 4);
+    row.height = 24;
+
+    columns.forEach((col, colIndex) => {
+      const cell = row.getCell(colIndex + 1);
+      cell.value = rowValues[col.key];
+
+      let bgArgb = 'FFFFFFFF';
+      if (col.group === 'date') {
+        bgArgb = isEven ? 'FFFFFBEB' : 'FFFEF3C7';
+      } else if (col.group === 'student') {
+        bgArgb = isEven ? 'FFFFFFFF' : 'FFEFF6FF';
+      } else if (col.group === 'dest') {
+        bgArgb = isEven ? 'FFF0FDFA' : 'FFCCFBF1';
+      } else {
+        bgArgb = isEven ? 'FFFFFFFF' : 'FFF8FAFC';
+      }
+
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgArgb } };
+      cell.font = { name: 'Arial', size: 10.5, bold: Boolean(col.bold), color: { argb: 'FF0F172A' } };
+      cell.alignment = {
+        horizontal: col.align,
+        vertical: 'middle',
+        wrapText: true,
+        readingOrder: 'rtl',
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        left: { style: col.groupEnd ? 'medium' : 'thin', color: { argb: col.groupEnd ? 'FF64748B' : 'FFCBD5E1' } },
+      };
+    });
+  });
+
+  worksheet.autoFilter = {
+    from: { row: 3, column: 1 },
+    to: { row: 3, column: columns.length },
+  };
+
+  const fileName = selectedYear && selectedYear !== 'ALL'
+    ? `صادر_الوثائق_${selectedYear}.xlsx`
+    : 'صادر_الوثائق_جميع_السنوات.xlsx';
+  await downloadWorkbook(workbook, fileName);
+  return list.length;
 };
 
 const exportToPDF = async (students: Student[], title = "سجل القيد العام") => {
@@ -1493,6 +1838,7 @@ interface ModernAppLayoutProps {
   setView: (v: 'list' | 'add' | 'edit' | 'detail' | 'trash' | 'settings' | 'stats') => void;
   setPrintMode: (m: 'none' | 'list' | 'single' | 'selected' | 'docsExport') => void;
   setShowPrintModal: (b: boolean) => void;
+  setShowExcelModal: (b: boolean) => void;
   setShowPrintTemplateModal: (b: boolean) => void;
   setShowPrintSelectedModal: (b: boolean) => void;
   handleDelete: (id: string) => void;
@@ -1541,6 +1887,7 @@ const ModernAppLayout = ({
   setView,
   setPrintMode,
   setShowPrintModal,
+  setShowExcelModal,
   setShowPrintTemplateModal,
   setShowPrintSelectedModal,
   handleDelete,
@@ -1870,37 +2217,47 @@ const ModernAppLayout = ({
 
           {/* Primary Action Toolbar (Hidden in Search Mode to show more names) */}
           {!inSearchMode && (
-            <div className="flex flex-wrap sm:flex-nowrap items-center justify-between sm:justify-start gap-1.5 sm:gap-2 shrink-0">
+            <div className="flex flex-nowrap items-center justify-between sm:justify-start gap-1 sm:gap-2 w-full sm:w-auto overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden shrink-0">
               <button 
                 onClick={() => { setSelectedId(null); setView('add'); }} 
-                className={`min-h-8 sm:min-h-9 py-1.5 px-2.5 sm:px-3.5 ${currentTheme.primary} ${currentTheme.hover} text-white rounded-xl text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0`}
+                className={`h-8 sm:h-9 px-2 sm:px-3.5 ${currentTheme.primary} ${currentTheme.hover} text-white rounded-xl text-[10.5px] sm:text-xs font-bold flex items-center justify-center gap-0.5 sm:gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0`}
                 title="إضافة طالب جديد (Ctrl+N)"
               >
-                <Plus size={14} className="shrink-0" />
-                <span>طالب جديد</span>
+                <Plus size={13} className="shrink-0 sm:w-3.5 sm:h-3.5" />
+                <span>طالب</span>
               </button>
 
               <button 
                 onClick={() => setShowPrintModal(true)} 
-                className="min-h-8 sm:min-h-9 py-1.5 px-2.5 sm:px-3.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                className="h-8 sm:h-9 px-1.5 sm:px-3.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-[10.5px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs transition-colors cursor-pointer whitespace-nowrap shrink-0"
                 title="طباعة السجل (Ctrl+P)"
               >
-                <Printer size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                <Printer size={13} className="text-blue-600 dark:text-blue-400 shrink-0 sm:w-3.5 sm:h-3.5" />
                 <span>طباعة</span>
+              </button>
+
+              <button 
+                type="button"
+                onClick={() => setShowExcelModal(true)} 
+                className="h-8 sm:h-9 px-1.5 sm:px-3.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-[10.5px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:border-emerald-300 dark:hover:border-emerald-700 shadow-xs transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                title="تصدير إلى Excel (سجل القيود العام / قيد معين / صادر الوثائق)"
+              >
+                <FileSpreadsheet size={13} className="text-emerald-600 dark:text-emerald-400 shrink-0 sm:w-3.5 sm:h-3.5" />
+                <span>Excel</span>
               </button>
 
               {/* Toggle Filter Button */}
               <button 
                 type="button"
                 onClick={() => setShowSearchFilters(prev => !prev)} 
-                className={`min-h-8 sm:min-h-9 py-1.5 px-2.5 sm:px-3 rounded-xl text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 border transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                className={`h-8 sm:h-9 px-1.5 sm:px-3 rounded-xl text-[10.5px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 border transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                   showSearchFilters || selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL'
                     ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 shadow-xs'
                     : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
                 }`}
                 title={showSearchFilters ? "إخفاء الفلاتر لعرض المزيد من الأسماء" : "إظهار الفلاتر"}
               >
-                <Filter size={14} className="shrink-0" />
+                <Filter size={13} className="shrink-0 sm:w-3.5 sm:h-3.5" />
                 <span className="hidden sm:inline">{showSearchFilters ? 'إخفاء الفلاتر' : 'فلاتر'}</span>
                 <span className="sm:hidden">فلاتر</span>
                 {(selectedRegFilter || statusFilter !== 'ALL' || yearFilter !== 'ALL') && (
@@ -1909,37 +2266,37 @@ const ModernAppLayout = ({
               </button>
 
               {/* View Mode Switcher: Table vs Cards */}
-              <div className="min-h-8 sm:min-h-9 flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 sm:p-1 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
+              <div className="h-8 sm:h-9 flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 sm:p-1 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
                 <button 
                   onClick={() => setModernViewType('table')} 
-                  className={`p-1.5 rounded-lg text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
+                  className={`p-1 sm:p-1.5 rounded-lg text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
                     modernViewType === 'table' 
                       ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs' 
                       : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
                   }`}
                   title="عرض الجدول"
                 >
-                  <List size={14} />
+                  <List size={13} className="sm:w-3.5 sm:h-3.5" />
                 </button>
                 <button 
                   onClick={() => setModernViewType('grid')} 
-                  className={`p-1.5 rounded-lg text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
+                  className={`p-1 sm:p-1.5 rounded-lg text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
                     modernViewType === 'grid' 
                       ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs' 
                       : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
                   }`}
                   title="عرض البطاقات"
                 >
-                  <LayoutGrid size={14} />
+                  <LayoutGrid size={13} className="sm:w-3.5 sm:h-3.5" />
                 </button>
               </div>
 
               <button 
                 onClick={() => setShowPrintTemplateModal(true)} 
-                className="min-h-8 min-w-8 sm:min-h-9 sm:min-w-9 p-1.5 flex items-center justify-center bg-white dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs transition-colors cursor-pointer shrink-0"
+                className="h-8 w-8 sm:h-9 sm:w-9 p-1 sm:p-1.5 flex items-center justify-center bg-white dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs transition-colors cursor-pointer shrink-0"
                 title="تخصيص أعمدة الطباعة"
               >
-                <SlidersHorizontal size={15} />
+                <SlidersHorizontal size={14} className="sm:w-[15px] sm:h-[15px]" />
               </button>
             </div>
           )}
@@ -2936,6 +3293,8 @@ export default function App() {
   const [yearFilter, setYearFilter] = useState('ALL');
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [printRegInput, setPrintRegInput] = useState('');
+  const [showExcelModal, setShowExcelModal] = useState(false);
+  const [excelRegInput, setExcelRegInput] = useState('');
   const [visibleCount, setVisibleCount] = useState(30);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -3182,7 +3541,7 @@ export default function App() {
   const regsCount = activeRegNumbers.length;
 
   const docYears = useMemo(() => {
-     if (!showPrintModal) return [];
+     if (!showPrintModal && !showExcelModal) return [];
      const ySet = new Set<string>();
      students.forEach(s => {
        if (s.isDeleted || !(s.status === 'transferred' || !!s.docDestination || !!s.docDate)) return;
@@ -3196,10 +3555,10 @@ export default function App() {
      });
      years.forEach(y => ySet.add(y.toString()));
      return Array.from(ySet).sort((a, b) => Number(b) - Number(a));
-  }, [students, years, showPrintModal]);
+  }, [students, years, showPrintModal, showExcelModal]);
 
   const transferredCountForYear = useMemo(() => {
-    if (!showPrintModal) return 0;
+    if (!showPrintModal && !showExcelModal) return 0;
     let count = 0;
     for (let i = 0; i < students.length; i++) {
       const s = students[i];
@@ -3217,7 +3576,7 @@ export default function App() {
       }
     }
     return count;
-  }, [students, docsExportYear, showPrintModal]);
+  }, [students, docsExportYear, showPrintModal, showExcelModal]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -4131,6 +4490,7 @@ export default function App() {
                         setView={setView}
                         setPrintMode={setPrintMode}
                         setShowPrintModal={setShowPrintModal}
+                        setShowExcelModal={setShowExcelModal}
                         setShowPrintTemplateModal={setShowPrintTemplateModal}
                         setShowPrintSelectedModal={setShowPrintSelectedModal}
                         handleDelete={handleDelete}
@@ -4372,6 +4732,14 @@ export default function App() {
                           className="flex-1 min-w-[120px] bg-white text-slate-700 border px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors"
                         >
                           <Printer size={16} /> طباعة
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => setShowExcelModal(true)} 
+                          data-tooltip="تصدير إلى Excel (سجل القيود العام / قيد معين / صادر الوثائق)"
+                          className="flex-1 min-w-[110px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-emerald-100 transition-colors"
+                        >
+                          <FileSpreadsheet size={16} /> Excel
                         </button>
                         <button 
                           onClick={() => setShowPrintTemplateModal(true)}
@@ -6186,6 +6554,222 @@ export default function App() {
                   <button 
                     type="button"
                     onClick={() => setShowPrintModal(false)} 
+                    className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-colors"
+                  >
+                    إغلاق
+                  </button>
+               </div>
+            </Modal>
+        )}
+
+        {/* Excel Export Modal (تصدير إلى Excel - مقسم إلى 3 أقسام) */}
+        {showExcelModal && (
+            <Modal onClose={() => setShowExcelModal(false)}>
+               <div className="bg-white rounded-2xl p-5 text-right space-y-4 shadow-xl max-h-[85vh] overflow-y-auto">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                     <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                       <FileSpreadsheet size={20} className="text-emerald-600" />
+                       <span>تصدير إلى Excel</span>
+                     </h3>
+                     <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full font-bold">
+                       XLSX
+                     </span>
+                  </div>
+
+                  {/* القسم 1: تصدير سجل القيود العام */}
+                  <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-2xl p-3.5 space-y-2.5">
+                    <div className="text-xs font-bold text-emerald-950 flex items-center justify-between border-b border-emerald-200/70 pb-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <Users size={15} className="text-emerald-600" />
+                        <span>تصدير سجل القيود العام</span>
+                      </div>
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
+                        {activeStudentsCount} طالب
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-emerald-900/80 font-medium">
+                      تصدير جميع بيانات الطلاب المسجلين في السجل العام إلى ملف Excel شامل.
+                    </p>
+
+                    <button 
+                      type="button"
+                      onClick={async () => { 
+                        const allActive = students.filter(s => !s.isDeleted);
+                        if (allActive.length === 0) {
+                          setAlertConfig({ message: 'لا توجد بيانات طلاب للتصدير', type: 'warning' });
+                          return;
+                        }
+                        await exportToExcel(allActive, {
+                          fileName: 'سجل_القيود_العام.xlsx',
+                          sheetName: 'سجل القيود العام',
+                          title: 'سجل القيود العام',
+                          accent: 'emerald'
+                        });
+                        setShowExcelModal(false);
+                        setAlertConfig({ message: `تم تصدير سجل القيود العام (${allActive.length} طالب) بنجاح`, type: 'success' });
+                      }} 
+                      className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-colors text-xs flex items-center justify-center gap-2 shadow-sm active:scale-98"
+                    >
+                      <Download size={15} />
+                      <span>تصدير سجل القيود العام بالكامل</span>
+                    </button>
+                  </div>
+
+                  {/* القسم 2: تصدير قيد معين */}
+                  <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2.5">
+                    <div className="text-xs font-bold text-slate-800 flex items-center justify-between border-b border-slate-200 pb-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <FileSpreadsheet size={15} className="text-blue-600" />
+                        <span>تصدير قيد معين</span>
+                      </div>
+                      {excelRegInput && (
+                        <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                          {students.filter(s => !s.isDeleted && String(s.regNumber) === String(excelRegInput)).length} طالب
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2">
+                      <select 
+                        value={excelRegInput} 
+                        onChange={(e) => setExcelRegInput(e.target.value)} 
+                        className="flex-1 p-2 border border-slate-200 rounded-xl text-center font-bold outline-none text-xs bg-white text-slate-800 cursor-pointer"
+                      >
+                           <option value="">اختر رقم القيد...</option>
+                           {activeRegNumbers.map(r => (
+                             <option key={r} value={r}>قيد {r}</option>
+                           ))}
+                      </select>
+                      <button 
+                        type="button"
+                        onClick={async () => { 
+                          const regStudents = students
+                            .filter(s => !s.isDeleted && String(s.regNumber) === String(excelRegInput))
+                            .sort((a, b) => {
+                              const pDiff = (Number(a.pageNumber) || 0) - (Number(b.pageNumber) || 0);
+                              if (pDiff !== 0) return pDiff;
+                              return cleanName(a.firstName).localeCompare(cleanName(b.firstName), 'ar');
+                            });
+                          if (regStudents.length === 0) {
+                            setAlertConfig({ message: 'لا يوجد طلاب في القيد المحدد', type: 'warning' });
+                            return;
+                          }
+                          await exportToExcel(regStudents, {
+                            fileName: `سجل_قيد_${excelRegInput}.xlsx`,
+                            sheetName: `قيد ${excelRegInput}`,
+                            title: `سجل القيد رقم (${excelRegInput})`,
+                            accent: 'blue'
+                          });
+                          setShowExcelModal(false);
+                          setAlertConfig({ message: `تم تصدير قيد ${excelRegInput} (${regStudents.length} طالب) بنجاح`, type: 'success' });
+                        }} 
+                        className={`px-4 py-2 ${currentTheme.primary} ${currentTheme.hover} text-white rounded-xl font-bold disabled:opacity-50 transition-colors text-xs flex items-center gap-1.5 shrink-0`} 
+                        disabled={!excelRegInput}
+                      >
+                        <Download size={14} />
+                        <span>تصدير القيد</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* القسم 3: تصدير صادر الوثائق */}
+                  <div className="bg-amber-50/80 border-2 border-amber-300 rounded-2xl p-3.5 space-y-3">
+                    <div className="flex items-center justify-between border-b border-amber-200 pb-1.5">
+                      <div className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                        <FileText size={16} className="text-amber-700" />
+                        <span>تصدير صادر الوثائق</span>
+                      </div>
+                      <span className="text-[10px] font-black bg-amber-200 text-amber-900 px-2 py-0.5 rounded-md">
+                        Excel (.xlsx)
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-amber-950 mb-1">
+                        خيارات الترتيب:
+                      </label>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setDocsExportSort('byDate')}
+                          className={`py-1.5 px-1 rounded-xl text-[11px] font-bold border transition-all text-center ${
+                            docsExportSort === 'byDate'
+                              ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                              : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100/60'
+                          }`}
+                        >
+                          تاريخ الوثيقة
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDocsExportSort('alphabetical')}
+                          className={`py-1.5 px-1 rounded-xl text-[11px] font-bold border transition-all text-center ${
+                            docsExportSort === 'alphabetical'
+                              ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                              : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100/60'
+                          }`}
+                        >
+                          الأبجدية
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDocsExportSort('byGradeAlpha')}
+                          className={`py-1.5 px-1 rounded-xl text-[11px] font-bold border transition-all text-center ${
+                            docsExportSort === 'byGradeAlpha'
+                              ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                              : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100/60'
+                          }`}
+                        >
+                          أبجدياً حسب الصف
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-amber-950 mb-1">
+                        تحديد السنة:
+                      </label>
+                      <select 
+                        value={docsExportYear} 
+                        onChange={(e) => setDocsExportYear(e.target.value)} 
+                        className="w-full p-2 border border-amber-200 rounded-xl font-bold outline-none text-xs bg-white text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                      >
+                        <option value="ALL">جميع السنوات</option>
+                        {docYears.map(y => (
+                          <option key={y} value={y}>سنة {y}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] font-bold text-amber-900 bg-white/80 px-3 py-1.5 rounded-xl border border-amber-200/60">
+                      <span>الوثائق الصادرة المطابقة:</span>
+                      <span className="font-mono bg-amber-500 text-white px-2 py-0.5 rounded-md text-xs font-black">
+                        {transferredCountForYear}
+                      </span>
+                    </div>
+
+                    <button 
+                      type="button"
+                      onClick={async () => { 
+                        if (transferredCountForYear === 0) {
+                          setAlertConfig({ message: 'لا توجد سجلات لوثائق صادرة للسنة المحددة', type: 'warning' });
+                          return;
+                        }
+                        const count = await exportDocsToExcel(students, docsExportYear, docsExportSort);
+                        setShowExcelModal(false);
+                        setAlertConfig({ message: `تم تصدير صادر الوثائق (${count} وثيقة) بنجاح`, type: 'success' });
+                      }} 
+                      className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold transition-colors text-xs flex items-center justify-center gap-2 shadow-md active:scale-98"
+                    >
+                      <Download size={15} />
+                      <span>تصدير صادر الوثائق (Excel)</span>
+                    </button>
+                  </div>
+
+                  <button 
+                    type="button"
+                    onClick={() => setShowExcelModal(false)} 
                     className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-colors"
                   >
                     إغلاق
